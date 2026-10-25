@@ -182,8 +182,8 @@ if __name__ == "__main__":
             send_telegram_message(messaggio)
 
             # Aggiorna il file con il nuovo ID solo dopo l'invio riuscito
-            with open(LAST_ACTIVITY_FILE, "w") as f:
-                f.write(activity_id)
+            #with open(LAST_ACTIVITY_FILE, "w") as f:
+                #f.write(activity_id)
 
             print(f"Report inviato per l'attività {activity_id}.")
         else:
