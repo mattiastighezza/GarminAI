@@ -213,3 +213,110 @@ Niente improvvisazioni nella prossima sessione. Attieniti alle seguenti direttiv
 
 ---
 
+## Attività 24873249537
+=== RIEPILOGO GENERALE ===
+Nome Attività: Parma Corsa
+Data e Ora Inizio: 2026-10-27 19:11:42
+Tipo Allenamento: running
+Distanza: 8.75 km
+Durata Timer Attivo: 0:55:06
+Durata in Movimento: 0:55:03
+Durata Totale (Elapsed): 0:55:06 (Tempo in pausa: 0:00:00)
+Passo Medio: 6:18 min/km (9.5 km/h) | Passo Picco: 3:59 min/km
+Dislivello: +18m / -23m | Quota: Min 56m / Max 68m
+
+=== FISIOLOGIA E CARICO ===
+FC Media: 154.0 bpm | FC Max: 173.0 bpm
+Training Effect Label: AEROBIC_BASE
+Training Effect Aerobico: 3.799999952316284 | Anaerobico: 0.800000011920929
+Training Load Acuto: 130
+VO2Max Stimato: 46.0
+Calorie: 796.0 kcal | Sudorazione stimata: 898.0 ml
+
+=== BIOMECCANICA, DINAMICHE DI CORSA E POTENZA ===
+Cadenza: 154 spm (Max: 182) | Passi Totali: 8534
+Lunghezza Media Falcata: 101.6 cm
+Oscillazione Verticale: 8.8 cm | Rapporto Verticale: 8.7%
+Tempo Contatto con il Suolo (GCT): 294 ms | Bilanciamento GCT: N/D
+Potenza Media: 351.0 W | Potenza Normalizzata (NP): 359.0 W | Potenza Max: 620.0 W
+
+=== METEO ===
+Condizioni: Fair | Temp: 11.1°C (Percepita: 11.1°C) | Umidità: 87% | Vento: 1
+
+=== TEMPO NELLE ZONE CARDIO ===
+  - Zona 1 (>=105 bpm): 0:01:21 (2.5%)
+  - Zona 2 (>=128 bpm): 0:02:21 (4.3%)
+  - Zona 3 (>=142 bpm): 0:49:56 (91.3%)
+  - Zona 4 (>=166 bpm): 0:01:03 (1.9%)
+  - Zona 5 (>=190 bpm): 0:00:00 (0.0%)
+
+=== DETTAGLIO LAP / INTERMEDI ===
+  Lap 01: 1.00km in 0:06:05 | Passo: 6:05 min/km | FC: 133.0/150.0 bpm | Cad: 157 spm | Falcata: 103.7cm | GCT: 290.20001220703125ms | Pot: 362.0W | D+/D-: +0/-1m
+  Lap 02: 1.00km in 0:06:13 | Passo: 6:13 min/km | FC: 148.0/155.0 bpm | Cad: 158 spm | Falcata: 102.2cm | GCT: 293.70001220703125ms | Pot: 354.0W | D+/D-: +0/-5m
+  Lap 03: 1.00km in 0:06:13 | Passo: 6:13 min/km | FC: 154.0/159.0 bpm | Cad: 157 spm | Falcata: 102.2cm | GCT: 294.79998779296875ms | Pot: 371.0W | D+/D-: +4/-0m
+  Lap 04: 1.00km in 0:06:10 | Passo: 6:10 min/km | FC: 156.0/160.0 bpm | Cad: 158 spm | Falcata: 102.7cm | GCT: 292.79998779296875ms | Pot: 365.0W | D+/D-: +0/-1m
+  Lap 05: 1.00km in 0:06:13 | Passo: 6:13 min/km | FC: 156.0/164.0 bpm | Cad: 158 spm | Falcata: 102.1cm | GCT: 294.1000061035156ms | Pot: 357.0W | D+/D-: +2/-7m
+  Lap 06: 1.00km in 0:06:20 | Passo: 6:20 min/km | FC: 159.0/162.0 bpm | Cad: 157 spm | Falcata: 100.1cm | GCT: 295.3999938964844ms | Pot: 360.0W | D+/D-: +4/-0m
+  Lap 07: 1.00km in 0:06:18 | Passo: 6:18 min/km | FC: 161.0/166.0 bpm | Cad: 157 spm | Falcata: 101.1cm | GCT: 295.1000061035156ms | Pot: 360.0W | D+/D-: +2/-3m
+  Lap 08: 1.00km in 0:06:15 | Passo: 6:15 min/km | FC: 163.0/166.0 bpm | Cad: 158 spm | Falcata: 101.3cm | GCT: 293.70001220703125ms | Pot: 365.0W | D+/D-: +3/-0m
+  Lap 09: 0.09km in 0:00:27 | Passo: 4:56 min/km | FC: 168.0/173.0 bpm | Cad: 167 spm | Falcata: 106.8cm | GCT: 272.20001220703125ms | Pot: 415.0W | D+/D-: +0/-0m
+  Lap 10: 0.11km in 0:01:00 | Passo: 9:25 min/km | FC: 160.0/173.0 bpm | Cad: 96 spm | Falcata: 96.5cm | GCT: 263.29998779296875ms | Pot: 176.0W | D+/D-: +1/-0m
+  Lap 11: 0.10km in 0:00:29 | Passo: 4:50 min/km | FC: 155.0/164.0 bpm | Cad: 159 spm | Falcata: 105.1cm | GCT: 261.8999938964844ms | Pot: 427.0W | D+/D-: +1/-0m
+  Lap 12: 0.11km in 0:01:00 | Passo: 9:24 min/km | FC: 152.0/166.0 bpm | Cad: 117 spm | Falcata: 88.7cm | GCT: 370.79998779296875ms | Pot: 176.0W | D+/D-: +0/-4m
+  Lap 13: 0.09km in 0:00:26 | Passo: 4:49 min/km | FC: 146.0/155.0 bpm | Cad: 140 spm | Falcata: 109.0cm | GCT: 260.3999938964844ms | Pot: 359.0W | D+/D-: +0/-0m
+  Lap 14: 0.11km in 0:01:00 | Passo: 9:19 min/km | FC: 144.0/156.0 bpm | Cad: 126 spm | Falcata: 95.0cm | GCT: 325.5ms | Pot: 209.0W | D+/D-: +0/-1m
+  Lap 15: 0.10km in 0:00:28 | Passo: 4:42 min/km | FC: 144.0/156.0 bpm | Cad: 161 spm | Falcata: 111.7cm | GCT: 295.29998779296875ms | Pot: 407.0W | D+/D-: +0/-1m
+  Lap 16: 0.05km in 0:00:31 | Passo: 9:38 min/km | FC: 151.0/159.0 bpm | Cad: 89 spm | Falcata: 88.0cm | GCT: 368.8999938964844ms | Pot: 148.0W | D+/D-: +0/-1m
+
+=== DERIVA CARDIACA & EFFICIENCY FACTOR (calcolo locale) ===
+  1ª Metà: FC 153.8 bpm | Passo 6:13 min/km | EF 1.045
+  2ª Metà: FC 152.3 bpm | Passo 7:06 min/km | EF 0.925
+  Deriva Cardiaca: -1.0% | Variazione EF: -11.5%
+
+**Analisi Coach:**
+Vedo che mi stai ripresentando gli stessi identici dati di allenamento o che hai replicato fedelmente la stessa sessione errata senza apportare alcuna modifica. La preparazione per una Mezza Maratona a 5:35 min/km richiede rigore scientifico ed esecuzione maniacale, non la ripetizione superficiale degli stessi errori.
+
+Analizziamo i dati in modo freddo e analitico.
+
+---
+
+### 1) ADERENZA AL PIANO E GESTIONE PAUSE
+* **Distanza e Struttura:** 8.75 km totali gestiti in modo del tutto scompaginato. Hai corso 8 km continui e poi ti sei concesso dal Lap 9 al Lap 16 un'anarchica alternanza di allunghi brevi (~4:45-4:50 min/km) e tratti camminati a oltre 9:15 min/km. Per un atleta di 96 kg che prepara i 21.097 km, strappi da 100 metri seguiti da camminate sono inutili per la base aerobica e aumentano solo lo stress articolare.
+* **Gestione del Passo:** Passo medio di **6:18 min/km**. Il tuo ritmo gara target è **5:35 min/km**: attualmente stai girando **43 secondi al chilometro più lento** del dovuto. Sui primi 8 km in tenuta continua la media è stata di 6:13 min/km. Sei completamente fuori strada rispetto ai ritmi richiesti.
+* **Gestione Pause:** Nessun utilizzo scorretto del tasto pausa manuale (tempo elapsed e movimento coincidono a 0:55:06). Tuttavia, le quattro frazioni camminate al termine della seduta costituiscono delle "pause attive mascherate" che hanno spezzato la continuità dello stimolo aerobico.
+
+---
+
+### 2) ANALISI FISIOLOGICA E TENUTA DEI LAP
+* **Analisi dell'Efficiency Factor (EF) e Deriva:**
+  * **1ª Metà:** FC media 153.8 bpm | Passo 6:13 min/km | **EF: 1.045**
+  * **2ª Metà:** FC media 152.3 bpm | Passo 7:06 min/km | **EF: 0.925**
+  * **Crollo EF:** **-11.5%**. Questo dato è impietoso. Nella seconda parte della seduta la tua efficienza cardiovascolare e meccanica è letteralmente crollata. L'inserimento delle camminate e delle accelerazioni ha sballato il rapporto tra costo metabolico e velocità prodotta.
+* **Tenuta nei Lap Continui (Lap 1 - Lap 8):**
+  * Nel primo chilometro parti a 6:05 min/km con 133 bpm. Già al Lap 3 (6:13 min/km) la frequenza cardiaca sale a 154 bpm, per poi stabilizzarsi sopra i 160 bpm dal Lap 7 in poi (picco di 166 bpm al Lap 8).
+  * A fronte di un passo che rallenta (da 6:05 a 6:20 min/km), la frequenza cardiaca sale di oltre 25 bpm dall'inizio alla fine del blocco continuo.
+* **Contesto Meteo:** 11.1°C e 87% di umidità. Il clima era ideale. La deriva e il crollo dell'efficienza sono dovuti esclusivamente a una **carenza di tenuta aerobica fondamentale** e al peso di 96 kg che chiede il conto alla distanza.
+
+---
+
+### 3) ANALISI BIOMECCANICA (Riferita alla massa di 96 kg)
+* **Cadenza:** Media di **154 spm** (157-158 spm nei lap continui). Per un runner di 1.85m per 96 kg, correre sotto i 160 spm significa sottoporre caviglie, ginocchia e bacino a picchi di impatto devastanti ad ogni appoggio.
+* **Tempo di Contatto al Suolo (GCT):** **294 ms** medio. Un tempo d'appoggio infinito. Stai letteralmente "stazionando" sull'asfalto invece di reattivarne la spinta. Nei lap camminati schizzi a oltre 360-370 ms.
+* **Oscillazione Verticale e Rapporto Verticale:** **8.8 cm** con un rapporto dell'**8.7%**. Stai sprecando energia cinetica verso l'alto. Ogni centimetro verticale in più significa dover sollevare i tuoi 96 kg per migliaia di volte inutilmente.
+* **Potenza Corsa:** **351 W medi** (NP 359 W). Disperdi 3.65 W/kg per viaggiare a un ritmo blando di 6:18 min/km. Migliorando la reattività del piede, la potenza prodotta si tradurrà in avanzamento e non in impatto.
+
+---
+
+### 4) DIRETTIVA OPERATIVA TASSATIVA PER LA PROSSIMA USCITA
+
+Basta improvvisazioni. Se vuoi arrivare ai 5:35 min/km sulla mezza maratona, devi costruire disciplina e tenuta.
+
+1. **Distanza e Struttura:** **10.0 km di corsa continua flattissima**. È severamente vietato effettuare accelerazioni, allunghi o tratti a piedi dal km 0 al km 10.0.
+2. **Correzione Cadenza e GCT (Obiettivo prioritario):** Sforzati di accorciare la falcata e portare la cadenza a **162-165 spm**. Questo deve abbassare il GCT sotto i **280 ms** e ridurre l'oscillazione verticale.
+3. **Pacing e Tetto Cardio:**
+   * **Passo Target:** **6:00 - 6:05 min/km** fisso (non più lento di 6:05, non più veloce di 5:55).
+   * **Tetto Cardio:** Non superare mai i **155 bpm**. Se la FC sale oltre i 155 bpm, accorcia ulteriormente il passo ma mantieni la cadenza alta (>160 spm).
+4. **Parametro di Controllo:** La variazione dell'Efficiency Factor (EF) tra prima e seconda metà della seduta dovrà essere inferiore al **3%**. Non tollererò un altro crollo dell'efficienza.
+
+---
+

@@ -1,0 +1,34 @@
+# ==========================================
+# 1. File contenenti segreti (Priorità)
+# ==========================================
+.env
+.env.local
+.env.development
+.env.production
+*.pem
+*.key
+*.cert
+*.crt
+secrets.json
+credentials.xml
+
+# ==========================================
+# 2. Cartelle di sistema e dipendenze
+# (Ignorarle velocizza l'agente ed evita modifiche accidentali)
+# ==========================================
+node_modules/
+__pycache__/
+venv/
+.venv/
+env/
+.git/
+.idea/
+.vscode/
+
+# ==========================================
+# 3. File di log e build
+# ==========================================
+*.log
+dist/
+build/
+coverage/
