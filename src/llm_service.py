@@ -2,9 +2,10 @@
 llm_service.py - Integrazione con Google Gemini per l'analisi AI.
 
 Gestisce la catena di fallback multi-modello, il retry esponenziale
-e il caricamento del system prompt da file esterno.
+e l'orchestrazione del Multi-Agent Debate (Fase 4: Fisiologo vs Tattico vs Giudice).
 """
 
+import asyncio
 import time
 
 import httpx
@@ -13,6 +14,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from src.config import GEMINI_API_KEY, GEMINI_MODELS, MAX_ATTEMPTS, PROMPTS_DIR
+from src.debate import run_multi_agent_debate
 
 
 def _load_system_prompt() -> str:
@@ -27,14 +29,10 @@ def _load_system_prompt() -> str:
         return f.read().strip()
 
 
-def analyze_with_gemini(
+def _analyze_single_agent_fallback(
     training_data: str, training_plan: str, history: str
 ) -> str:
-    """Invia i dati dell'allenamento a Gemini e restituisce l'analisi testuale.
-
-    Prova i modelli in ordine di priorità con retry esponenziale sugli
-    errori transitori e skip immediato su 404/429.
-    """
+    """Fallback monolitico su singolo agente nel caso di fallimento del debate."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY non trovata: controlla il file .env")
 
@@ -52,7 +50,6 @@ def analyze_with_gemini(
     )
 
     models = [m.strip() for m in GEMINI_MODELS.split(",") if m.strip()]
-
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
         temperature=0.5,
@@ -62,21 +59,16 @@ def analyze_with_gemini(
     for model in models:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                print(f"Chiamo Gemini ({model}), tentativo {attempt}/{MAX_ATTEMPTS}...")
+                print(f"Fallback Coach ({model}), tentativo {attempt}/{MAX_ATTEMPTS}...")
                 response = client.models.generate_content(
                     model=model,
                     contents=full_contents,
                     config=config,
                 )
-                return response.text
+                if response and response.text:
+                    return response.text
             except genai_errors.ClientError as e:
-                # 404 = modello non disponibile, 429 = quota esaurita:
-                # inutile riprovare, passa al modello successivo.
                 if getattr(e, "code", None) in (404, 429):
-                    print(
-                        f"Modello {model} non utilizzabile (errore {e.code}). "
-                        "Passo al successivo."
-                    )
                     last_error = e
                     break
                 raise
@@ -88,15 +80,42 @@ def analyze_with_gemini(
                 last_error = e
                 if attempt < MAX_ATTEMPTS:
                     wait = 5 * 2 ** (attempt - 1)
-                    print(
-                        f"Gemini ({model}) non disponibile "
-                        f"(tentativo {attempt}/{MAX_ATTEMPTS}). Riprovo tra {wait}s..."
-                    )
                     time.sleep(wait)
-                else:
-                    print(
-                        f"Gemini ({model}) ancora non disponibile. "
-                        "Passo al modello successivo."
-                    )
 
-    raise last_error
+    raise last_error or RuntimeError("Fallback single-agent fallito su tutti i modelli.")
+
+
+async def analyze_with_gemini_async(
+    training_data: str, training_plan: str, history: str
+) -> str:
+    """Esegue l'analisi asincrona tramite Multi-Agent Debate con fallback automatico."""
+    try:
+        return await run_multi_agent_debate(training_data, training_plan, history)
+    except Exception as e:
+        print(f"⚠️ Multi-Agent Debate non riuscito ({e}). Attivazione fallback a coach singolo...")
+        return await asyncio.to_thread(
+            _analyze_single_agent_fallback, training_data, training_plan, history
+        )
+
+
+def analyze_with_gemini(
+    training_data: str, training_plan: str, history: str
+) -> str:
+    """Interfaccia principale sincrona: lancia il Multi-Agent Debate gestendo l'event loop."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # Se siamo già dentro un event loop attivo (es. bot Telegram o worker asincrono)
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(
+                asyncio.run,
+                analyze_with_gemini_async(training_data, training_plan, history)
+            ).result()
+    else:
+        return asyncio.run(
+            analyze_with_gemini_async(training_data, training_plan, history)
+        )

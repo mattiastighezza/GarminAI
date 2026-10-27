@@ -24,6 +24,7 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `piano_allenamento.txt`: Tabella di allenamento in testo libero.
   - `storico_allenamenti.md`: Log progressivo cumulativo delle sessioni e delle analisi AI.
   - `profilo_atleta.json`: Scheda anagrafica e parametri fisiologici dinamici (previsto, attualmente hardcoded).
+  - `prompts/`: System prompt specializzati (`coach_system.md`, `fisiologo_system.md`, `tattico_system.md`, `giudice_system.md`).
 
 ---
 
@@ -32,10 +33,17 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `src/config.py`: Gestione configurazione centralizzata, percorsi e variabili d'ambiente.
   - `src/garmin_client.py`: Inizializzazione client Garmin e recupero nuove attività.
   - `src/telemetry.py`: Formattazione metriche, estrazione dati avanzati (meteo, zone HR, split) e calcolo matematico locale della deriva cardiaca/Efficiency Factor.
-  - `src/llm_service.py`: Client unificato Gemini con catena di fallback resiliente e caricamento prompt esterno.
+  - `src/debate.py`: Orchestratore del Multi-Agent Debate a due round con supporto parallelo non bloccante.
+  - `src/llm_service.py`: Client unificato Gemini con orchestrazione debate e catena di fallback resiliente.
   - `src/notifier.py`: Invio messaggi Telegram con chunking intelligente.
   - `src/storage.py`: Gestione persistenza per piano di allenamento, storico e ID ultima attività.
-  - `prompts/coach_system.md`: System prompt esternalizzato e versionabile.
+  - `prompts/`: System prompt specializzati per i diversi ruoli del coach e del dibattito.
+- **Multi-Agent Debate (Completata Fase 4 ✅):**
+  - Contraddittorio competitivo strutturato a 3 agenti:
+    1. **Il Fisiologo (Difesa):** valuta l'impatto biologico del peso (96 kg), la termoregolazione/meteo, la deriva cardiaca e la variazione dell'Efficiency Factor pre-calcolati.
+    2. **Il Tattico di Pista (Accusa):** analizza la geometria della corsa, gli split chilometrici, il mancato rispetto del target 5:35 min/km e le pause superflue con tolleranza zero.
+    3. **L'Head Coach (Giudice Supremo):** valuta le tesi contrapposte sui dati reali della sessione ed emette il verdetto finale operativo in 4 punti direttamente all'atleta, senza citare gli agenti interni o il dibattito.
+  - **Esecuzione & Vincoli Free Tier:** Round 1 parallelo asincrono con `asyncio.gather()`, stampa terminale per debug di fisiologo/tattico, spacing di sicurezza per il rispetto del limite di 15 RPM, Round 2 di sintesi e fallback automatico al modello coach singolo in caso di errore.
 - **Autenticazione Garmin Stabile:** Riuso token OAuth locali in `~/.garmin_tokens` per prevenire blocchi di sessione e gestire il prompt MFA.
 - **Estrazione Telemetrica Approfondita:**
   - Metriche aggregate: Distanza, tempo attivo, elapsed, pause, passo medio/picco, dislivello.
@@ -102,15 +110,12 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
      - Verificare se la seduta corrisponde a quella prevista per il giorno corrente e calcolare l'aderenza (1-10).
      - Se non corrisponde (o era giorno di riposo), confrontare le metriche con le altre sedute della settimana per riconoscere se si tratta di un recupero o un anticipo.
 
-### FASE 4: Multi-Agent Debate (Fisiologo vs Tattico vs Giudice)
+### FASE 4: Multi-Agent Debate (Fisiologo vs Tattico vs Giudice) [COMPLETATA ✅]
 *Obiettivo:* Eliminare le risposte piatte e le allucinazioni tramite un contraddittorio competitivo strutturato, mantenendosi entro i vincoli del Free Tier (15 RPM).
-* **Architettura a 3 Agenti:**
-  1. **Agente 1 - Il Fisiologo (Avvocato Difensore):** Analizza la sessione dal punto di vista biologico: impatto del peso (96 kg), deriva cardiaca calcolata, meteo, FC e fatica pregressa. Spiega le cause metaboliche delle variazioni di ritmo.
-  2. **Agente 2 - Il Tattico di Pista (Accusatore Rigido):** Analizza la geometria della corsa: split chilometrici, mancato rispetto del target 5:35 min/km, regolarità dei lap, pause superflue. Rifiuta le giustificazioni ambientali.
-  3. **Agente 3 - L'Head Coach (Giudice Supremo):** Legge i dati reali e le due tesi contrapposte, smonta le argomentazioni deboli ed emette il verdetto finale operativo in 4 punti per Telegram.
-* **Come implementarlo in `src/llm_service.py`:**
-  - Round 1 (Parallelo): Eseguire contemporaneamente `tesi_fisiologo` e `tesi_tattico` tramite `asyncio.gather(call_agent(prompt_fisiologo), call_agent(prompt_tattico))`.
-  - Round 2 (Sintesi): Inviare a Gemini un unico prompt finale contenente i dati dell'allenamento e le due tesi, chiedendo la risoluzione del dibattito e il report definitivo.
+* **Implementazione effettuata:**
+  - Creati i prompt specializzati `prompts/fisiologo_system.md`, `prompts/tattico_system.md` e `prompts/giudice_system.md`.
+  - Creato l'orchestratore `src/debate.py` con Round 1 in parallelo (`asyncio.gather`), spacing protettivo per il Free Tier e Round 2 di sintesi del Giudice.
+  - Integrato in `src/llm_service.py` con fallback automatico e trasparenza verso `main.py`.
 
 ### FASE 5: Integrazione Cross-Training (MTB & Palestra)
 *Obiettivo:* Far considerare al modello il carico neuromuscolare e metabolico extra-corsa.
