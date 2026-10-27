@@ -26,6 +26,7 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `profilo_atleta.json`: Scheda anagrafica e parametri fisiologici dinamici (previsto, attualmente hardcoded).
   - `mock_data/`: Dataset simulati per lo sviluppo e test offline (`mock_data/running_activity.json`).
   - `prompts/`: System prompt specializzati (`coach_system.md`, `fisiologo_system.md`, `tattico_system.md`, `giudice_system.md`).
+  - `ultime_direttive.json`: Cache degli ordini operativi dell'ultima seduta per la verifica nel feedback loop (previsto Fase 9).
 
 ---
 
@@ -154,3 +155,24 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - Creato `mock_data/running_activity.json` e la classe simulata `src/mock_client.py` (`MockGarminClient`) per consentire collaudi offline istantanei via `python main.py --mock`.
   - Creato `src/rate_limiter.py` con sliding-window su 60 secondi (target di sicurezza 12 RPM) e intervallo minimo anti-burst, integrato in `src/debate.py`.
   - Risolto il mancato aggiornamento di `~/.garmin_last_id.txt` in `main.py` per prevenire la ri-elaborazione continua della medesima sessione reale.
+
+### FASE 9: Ottimizzazione Architetturale Multi-Agent Debate & Feedback Loop
+*Obiettivo:* Rendere il dibattito a due round rigorosamente deterministico nei calcoli, strutturato tramite schemi JSON Pydantic, protetto da crash di formattazione Telegram ed evoluto a coach persistente verificando l'aderenza alle direttive della seduta precedente.
+* **1. Pre-Processing Deterministico Python (a monte del Round 1):**
+  - Parsing del piano e isolamento della seduta programmata per la data odierna.
+  - Calcolo matematico a monte di: $\Delta$ passo medio rispetto al target (sec/km), durata e incidenza pause ($T_{\text{elapsed}} - T_{\text{moving}}$), dislivello e cadenza vs soglia minima.
+  - Fornitura di un set di "fatti incontrovertibili" a Tattico e Fisiologo per azzerare le allucinazioni aritmetiche.
+* **2. Output Strutturato (JSON / Pydantic SDK `google-genai`):**
+  - Definizione degli schemi `TatticoOutput` e `FisiologoOutput` tramite Pydantic e parametri nativi `response_mime_type="application/json"` con `response_schema`.
+  - Il Giudice riceve dizionari puliti e ad alta densità anziché testi liberi in Markdown, velocizzando la sintesi ed eliminando il rumore.
+* **3. Calibrazione Temperature & Model Routing:**
+  - Tattico: `temperature=0.1 - 0.2` (contabilità e geometria della corsa rigorosa, zero interpretazioni).
+  - Fisiologo: `temperature=0.3 - 0.4` (rigore metabolico e biologico, eliminazione correlazioni fittizie).
+  - Giudice: `temperature=0.5` (fluidità verbale per tono relazionale "Tough Love").
+  - Routing modelli: valutazione di modelli ultra-rapidi/economici per il Round 1 strutturato e modello a pieno contesto/reasoning per il Giudice.
+* **4. Chiusura Feedback Loop (Verifica Direttiva Precedente $N-1$):**
+  - Persistenza su file/storage (`ultime_direttive.json`) delle 3-4 direttive operative assegnate dal Giudice alla seduta $N-1$.
+  - Iniezione degli ordini precedenti nel prompt di Tattico e Giudice per la seduta $N$ per verificare disciplina, recidive o correzioni.
+* **5. Sanitizzazione e Parsing HTML Telegram:**
+  - Istruzione del prompt del Giudice a formattare l'output direttamente in HTML semplice (`<b>`, `<i>`, `<code>`).
+  - Aggiornamento di `src/notifier.py` con `parse_mode="HTML"` per garantire output formattato ed elegante, eliminando i crash dovuti ai caratteri speciali non escapati di `MarkdownV2`.
