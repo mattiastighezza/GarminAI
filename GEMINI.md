@@ -28,12 +28,24 @@
 - Chiarimento dei Dubbi Se un'istruzione è ambigua o rischiosa per il sistema, fermati immediatamente e chiedi conferma.
 - Rapporto dei Cambiamenti Dopo ogni operazione, fornisci un riepilogo sintetico di cosa è stato modificato.
 
-## 6. Mantenimento del Contesto e Documentazione
-- **Aggiornamento Obbligatorio del Contesto**: 
-  Al termine di ogni implementazione completata con successo, prima di dichiarare il task finito, devi AUTONOMAMENTE aprire e aggiornare il file di contesto del progetto (attualmente `context.md`).
-  Se l'utente dice "Chiudi il task" e non era ancora stata eseguita questa azione allora dichiara il task finito ed esegui l'aggiornamento del file di contesto.
-- **Procedura di Aggiornamento**:
-  1. Sposta la funzionalità appena completata dalla sezione "Roadmap Sviluppi Futuri" alla sezione "Stato Attuale dell'Implementazione".
-  2. Aggiorna la sezione "Tech Stack & Vincoli" se hai introdotto nuovi file, moduli o librerie.
-  3. Aggiungi eventuali nuovi step logici alla Roadmap se l'implementazione ha fatto emergere nuovi requisiti.
-- **Divieto di Omissione**: Non saltare mai questo passaggio. Mostra sempre il *diff* delle modifiche al file di contesto e attendi l'approvazione finale.
+## 6. Mantenimento del Contesto e Validazione dei Task
+- **Gate di Validazione Umana (Obbligatorio)**:
+  Non considerare MAI un task o una funzionalità come completata solo perché hai generato o modificato il codice. 
+  La scrittura del codice non equivale al successo: un'implementazione è considerata completata SOLTANTO dopo che l'utente ha eseguito i test e confermato esplicitamente il corretto funzionamento.
+
+- **Comportamento Post-Scrittura Codice**:
+  Al termine della stesura o modifica del codice, NON toccare `context.md`. 
+  Limitati a:
+  1. Spiegare in sintesi le modifiche apportate.
+  2. Fornire all'utente il comando o la procedura per verificare il funzionamento (es. comandi da terminale, test di esecuzione).
+  3. Chiedere conferma del funzionamento all'utente prima di qualsiasi altra operazione.
+
+- **Trigger di Sincronizzazione Documentale**:
+  L'aggiornamento di `context.md` deve avvenire ESCLUSIVAMENTE quando l'utente digita esplicitamente frasi di chiusura confermata (es. *"Funziona, chiudi il task"* o *"Test superati, chiudi il task"*).
+  Se l'utente scrive "Chiudi il task" senza aver prima confermato il test, chiedi conferma: *"Hai verificato che il codice funzioni come previsto prima di aggiornare lo stato del progetto?"*.
+
+- **Procedura di Aggiornamento di `context.md` (Solo post-conferma)**:
+  1. Sposta la funzionalità validata da "Roadmap Sviluppi Futuri" a "Stato Attuale dell'Implementazione".
+  2. Aggiorna "Tech Stack & Vincoli" se hai introdotto nuovi file, moduli o librerie.
+  3. Aggiungi eventuali nuovi step logici alla Roadmap emersi durante l'iterazione.
+  4. Mostra il diff delle modifiche al file di contesto per approvazione finale.
