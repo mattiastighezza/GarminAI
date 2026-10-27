@@ -190,8 +190,10 @@ async def run_multi_agent_debate(
         f"=== ANALISI TECNICA INTERNA 1 (ASPETTI METABOLICI E FISIOLOGICI) ===\n{tesi_fisiologo}\n\n"
         f"=== ANALISI TECNICA INTERNA 2 (ASPETTI TATTICI E GEOMETRIA CORSA) ===\n{tesi_tattico}\n\n"
         "Ora produci il tuo verdetto e report operativo finale per l'atleta. "
-        "RICORDA: parla direttamente come unico Head Coach. NON citare e NON fare alcun "
-        "riferimento alle analisi interne, al Fisiologo, al Tattico o al dibattito."
+        "RICORDA: parla direttamente all'atleta in prima persona come unico Head Coach. "
+        "Usa un tono 'Tough Love': severo e inflessibile sulla disciplina e sui dati, "
+        "ma complice, amichevole e incoraggiante. "
+        "NON citare e NON fare alcun riferimento alle analisi interne, al Fisiologo, al Tattico o al dibattito."
     )
 
     print("\n⚖️ [Debate] Avvio Round 2: L'Head Coach (Giudice Supremo) valuta il dibattito...")
