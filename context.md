@@ -24,6 +24,7 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `piano_allenamento.txt`: Tabella di allenamento in testo libero.
   - `storico_allenamenti.md`: Log progressivo cumulativo delle sessioni e delle analisi AI.
   - `profilo_atleta.json`: Scheda anagrafica e parametri fisiologici dinamici (previsto, attualmente hardcoded).
+  - `mock_data/`: Dataset simulati per lo sviluppo e test offline (`mock_data/running_activity.json`).
   - `prompts/`: System prompt specializzati (`coach_system.md`, `fisiologo_system.md`, `tattico_system.md`, `giudice_system.md`).
 
 ---
@@ -37,7 +38,13 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `src/llm_service.py`: Client unificato Gemini con orchestrazione debate e catena di fallback resiliente.
   - `src/notifier.py`: Invio messaggi Telegram con chunking intelligente.
   - `src/storage.py`: Gestione persistenza per piano di allenamento, storico e ID ultima attività.
+  - `src/mock_client.py`: Emulatore offline di Garmin Connect per collaudo locale a costo zero.
+  - `src/rate_limiter.py`: Gestione dinamica rate-limit Free Tier Gemini (sliding-window anti-429).
   - `prompts/`: System prompt specializzati per i diversi ruoli del coach e del dibattito.
+- **Rifiniture Tecniche & Robustezza (Completata Fase 8 ✅):**
+  - **Modalità Mock Offline (`--mock`):** permette di eseguire l'intera pipeline (`python main.py --mock`) usando il dataset locale realistico `mock_data/running_activity.json`, senza interrogare Garmin Connect e senza alterare l'ID dell'attività reale né lo storico di produzione.
+  - **Rate Limiter Dinamico Gemini:** singleton centralizzato `GeminiRateLimiter` con sliding window a 60 secondi (target 12 RPM rispetto al limite 15 RPM) e intervallo minimo garantito per prevenire errori 429 durante il dibattito a più round.
+  - **Risoluzione Bug Idempotenza Garmin:** integrata la chiamata mancante a `save_last_activity_id(activity_id)` a completamento dell'invio Telegram reale.
 - **Multi-Agent Debate (Completata Fase 4 ✅):**
   - Contraddittorio competitivo strutturato a 3 agenti:
     1. **Il Fisiologo (Difesa):** valuta l'impatto biologico del peso (96 kg), la termoregolazione/meteo, la deriva cardiaca e la variazione dell'Efficiency Factor pre-calcolati.
@@ -141,6 +148,9 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
      - `storico_sintetico.jsonl`: una riga JSON compatta per seduta.
   2. Nel prompt passare le ultime 10-15 sessioni da `storico_sintetico.jsonl` (consumo < 1500 token).
 
-### FASE 8: Rifiniture Tecniche & Robustezza
-* **Gestione Rate-Limit Dinamica:** Aggiungere un delay minimo o un token-bucket se si concatenano chiamate multiple durante il debate.
-* **Modalità Mock per Sviluppo Offline:** Creare un flag `--mock` che carica un JSON Garmin locale senza effettuare chiamate di rete, permettendo di testare il debate LLM a costo zero.
+### FASE 8: Rifiniture Tecniche & Robustezza [COMPLETATA ✅]
+*Obiettivo:* Garantire stabilità operativa, conformità ai limiti di rate-limit Free Tier e facilità di sviluppo locale.
+* **Implementazione effettuata:**
+  - Creato `mock_data/running_activity.json` e la classe simulata `src/mock_client.py` (`MockGarminClient`) per consentire collaudi offline istantanei via `python main.py --mock`.
+  - Creato `src/rate_limiter.py` con sliding-window su 60 secondi (target di sicurezza 12 RPM) e intervallo minimo anti-burst, integrato in `src/debate.py`.
+  - Risolto il mancato aggiornamento di `~/.garmin_last_id.txt` in `main.py` per prevenire la ri-elaborazione continua della medesima sessione reale.

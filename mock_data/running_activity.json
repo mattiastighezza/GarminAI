@@ -1,0 +1,70 @@
+{
+  "activity": {
+    "activityId": 9999999999,
+    "activityName": "Corsa mattutina - Test Mock",
+    "startTimeLocal": "2026-10-28 07:15:00",
+    "activityType": {
+      "typeKey": "running"
+    },
+    "distance": 10040.0,
+    "duration": 3345.0,
+    "movingDuration": 3330.0,
+    "elapsedDuration": 3380.0,
+    "averageSpeed": 3.001,
+    "maxSpeed": 3.82,
+    "averageHR": 162.0,
+    "maxHR": 179.0,
+    "elevationGain": 35.0,
+    "elevationLoss": 38.0,
+    "minElevation": 42.0,
+    "maxElevation": 68.0,
+    "averageRunningCadenceInStepsPerMinute": 168.0,
+    "maxRunningCadenceInStepsPerMinute": 178.0,
+    "avgStrideLength": 1.07,
+    "avgVerticalOscillation": 8.9,
+    "avgVerticalRatio": 8.3,
+    "avgGroundContactTime": 258.0,
+    "avgGroundContactBalance": 49.4,
+    "steps": 9360,
+    "avgPower": 310,
+    "maxPower": 420,
+    "normPower": 322,
+    "aerobicTrainingEffect": 3.8,
+    "anaerobicTrainingEffect": 1.2,
+    "trainingEffectLabel": "IMPATTO_AEROBICO",
+    "activityTrainingLoad": 145.0,
+    "vO2MaxValue": 48.0,
+    "calories": 920.0,
+    "waterEstimated": 850
+  },
+  "weather": {
+    "temp": 64.4,
+    "apparentTemp": 64.4,
+    "relativeHumidity": 72,
+    "windSpeed": 3.2,
+    "weatherTypeDTO": {
+      "desc": "Parzialmente nuvoloso"
+    }
+  },
+  "hr_zones": [
+    { "zoneNumber": 1, "secsInZone": 120, "zoneLowBoundary": 115 },
+    { "zoneNumber": 2, "secsInZone": 600, "zoneLowBoundary": 135 },
+    { "zoneNumber": 3, "secsInZone": 1820, "zoneLowBoundary": 153 },
+    { "zoneNumber": 4, "secsInZone": 760, "zoneLowBoundary": 171 },
+    { "zoneNumber": 5, "secsInZone": 45, "zoneLowBoundary": 185 }
+  ],
+  "splits": {
+    "lapDTOs": [
+      { "distance": 1000.0, "duration": 340.0, "averageSpeed": 2.941, "averageHR": 148, "maxHR": 155, "averageRunCadence": 83.0, "averagePower": 295, "elevationGain": 2.0, "elevationLoss": 1.0, "groundContactTime": 265, "strideLength": 105.0 },
+      { "distance": 1000.0, "duration": 335.0, "averageSpeed": 2.985, "averageHR": 154, "maxHR": 160, "averageRunCadence": 83.5, "averagePower": 302, "elevationGain": 3.0, "elevationLoss": 4.0, "groundContactTime": 262, "strideLength": 106.0 },
+      { "distance": 1000.0, "duration": 332.0, "averageSpeed": 3.012, "averageHR": 158, "maxHR": 164, "averageRunCadence": 84.0, "averagePower": 308, "elevationGain": 5.0, "elevationLoss": 2.0, "groundContactTime": 260, "strideLength": 107.0 },
+      { "distance": 1000.0, "duration": 334.0, "averageSpeed": 2.994, "averageHR": 161, "maxHR": 166, "averageRunCadence": 84.0, "averagePower": 310, "elevationGain": 4.0, "elevationLoss": 6.0, "groundContactTime": 259, "strideLength": 106.5 },
+      { "distance": 1000.0, "duration": 331.0, "averageSpeed": 3.021, "averageHR": 163, "maxHR": 168, "averageRunCadence": 84.5, "averagePower": 312, "elevationGain": 3.0, "elevationLoss": 3.0, "groundContactTime": 257, "strideLength": 107.0 },
+      { "distance": 1000.0, "duration": 336.0, "averageSpeed": 2.976, "averageHR": 165, "maxHR": 170, "averageRunCadence": 84.0, "averagePower": 311, "elevationGain": 6.0, "elevationLoss": 2.0, "groundContactTime": 258, "strideLength": 106.0 },
+      { "distance": 1000.0, "duration": 335.0, "averageSpeed": 2.985, "averageHR": 166, "maxHR": 172, "averageRunCadence": 84.0, "averagePower": 314, "elevationGain": 4.0, "elevationLoss": 5.0, "groundContactTime": 256, "strideLength": 106.5 },
+      { "distance": 1000.0, "duration": 333.0, "averageSpeed": 3.003, "averageHR": 168, "maxHR": 174, "averageRunCadence": 84.5, "averagePower": 315, "elevationGain": 2.0, "elevationLoss": 3.0, "groundContactTime": 255, "strideLength": 107.0 },
+      { "distance": 1000.0, "duration": 338.0, "averageSpeed": 2.958, "averageHR": 170, "maxHR": 176, "averageRunCadence": 83.5, "averagePower": 313, "elevationGain": 5.0, "elevationLoss": 8.0, "groundContactTime": 257, "strideLength": 106.0 },
+      { "distance": 1040.0, "duration": 331.0, "averageSpeed": 3.141, "averageHR": 174, "maxHR": 179, "averageRunCadence": 85.0, "averagePower": 328, "elevationGain": 1.0, "elevationLoss": 4.0, "groundContactTime": 250, "strideLength": 110.0 }
+    ]
+  }
+}

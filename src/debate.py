@@ -21,6 +21,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from src.config import GEMINI_API_KEY, GEMINI_MODELS, MAX_ATTEMPTS, PROMPTS_DIR
+from src.rate_limiter import global_rate_limiter
 
 
 def load_prompt_file(filename: str) -> str:
@@ -64,6 +65,7 @@ async def call_model_with_fallback(
     for model in models:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
+                await global_rate_limiter.acquire(agent_name=agent_name)
                 print(f"[{agent_name}] Chiamo Gemini ({model}), tentativo {attempt}/{MAX_ATTEMPTS}...")
                 response = await asyncio.to_thread(
                     client.models.generate_content,

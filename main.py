@@ -2,7 +2,8 @@
 main.py - Entry point dell'applicazione GarminAI.
 
 Orchestratore principale: recupera le nuove attività da Garmin,
-le analizza tramite Gemini e invia il report su Telegram.
+le analizza tramite il Multi-Agent Debate (Gemini) e invia il report su Telegram.
+Supporta il flag '--mock' per testare la pipeline offline a costo zero.
 """
 
 import sys
@@ -10,14 +11,27 @@ import sys
 from src.garmin_client import init_garmin, get_new_activities
 from src.llm_service import analyze_with_gemini
 from src.notifier import send_telegram_message
-from src.storage import get_training_plan, read_history, update_history
+from src.storage import (
+    get_training_plan,
+    read_history,
+    update_history,
+    save_last_activity_id,
+)
 from src.telemetry import build_activity_data
 
 
 def main() -> None:
-    garmin = init_garmin()
-    print("Login Garmin OK. Leggo le ultime attività...")
-    new_activities = get_new_activities(garmin)
+    is_mock = "--mock" in sys.argv
+
+    if is_mock:
+        print("🧪 [MOCK MODE] Avvio con dataset locale (mock_data/running_activity.json)...")
+        from src.mock_client import MockGarminClient
+        garmin = MockGarminClient()
+        new_activities = garmin.get_activities()
+    else:
+        garmin = init_garmin()
+        print("Login Garmin OK. Leggo le ultime attività...")
+        new_activities = get_new_activities(garmin)
 
     if not new_activities:
         print("Nessun nuovo allenamento da notificare.")
@@ -37,11 +51,10 @@ def main() -> None:
             )
             continue
 
-        print(f"Nuova attività di corsa {activity_id} trovata. Analisi con Gemini...")
+        print(f"Nuova attività di corsa {activity_id} trovata. Analisi con Gemini Debate...")
         storico = read_history()
 
-        # Se Gemini fallisce l'eccezione sale: nessun invio e nessun
-        # salvataggio dell'ID, così l'attività viene riprovata al prossimo avvio.
+        # Esegue il Multi-Agent Debate a 3 agenti (Fisiologo vs Tattico -> Head Coach)
         analisi = analyze_with_gemini(full_training_data, piano_allenamento, storico)
 
         messaggio = (
@@ -50,13 +63,30 @@ def main() -> None:
             f"🤖 Analisi AI:\n{analisi}"
         )
 
-        print("Analisi ricevuta. Invio su Telegram...")
-        send_telegram_message(messaggio)
+        if is_mock:
+            print("\n" + "=" * 70)
+            print("🏁 REPORT FINALE DEL COACH (SIMULAZIONE MOCK):")
+            print("=" * 70)
+            print(messaggio)
+            print("=" * 70 + "\n")
+            # In modalità mock prova a notificare Telegram se configurato, senza bloccare il flusso
+            try:
+                send_telegram_message(messaggio)
+                print("📨 Notifica Telegram inviata anche in modalità mock.")
+            except Exception as e:
+                print(f"ℹ️ Invio Telegram saltato in modalità mock ({e}).")
+            print(f"✅ Test mock completato per attività {activity_id}. (Puntatore di produzione non modificato)")
+        else:
+            print("Analisi ricevuta. Invio su Telegram...")
+            send_telegram_message(messaggio)
 
-        # Salva dati completi e feedback nello storico
-        update_history(activity_id, full_training_data, analisi)
+            # Salva dati completi e feedback nello storico
+            update_history(activity_id, full_training_data, analisi)
 
-        print(f"Report inviato e storico aggiornato per l'attività {activity_id}.")
+            # Salva l'ID dell'attività per non riprocessarla più ai successivi avvii
+            save_last_activity_id(activity_id)
+
+            print(f"Report inviato, storico aggiornato e ID {activity_id} segnato come elaborato.")
 
 
 if __name__ == "__main__":
