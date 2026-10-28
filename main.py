@@ -22,6 +22,12 @@ from src.telemetry import build_activity_data
 
 def main() -> None:
     is_mock = "--mock" in sys.argv
+    is_bot = "--bot" in sys.argv
+
+    if is_bot:
+        from src.bot import run_bot
+        run_bot(is_mock=is_mock)
+        return
 
     if is_mock:
         print("🧪 [MOCK MODE] Avvio con dataset locale (mock_data/running_activity.json)...")

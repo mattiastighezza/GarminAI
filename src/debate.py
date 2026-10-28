@@ -21,6 +21,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from src.config import GEMINI_API_KEY, GEMINI_MODELS, MAX_ATTEMPTS, PROMPTS_DIR
+from src.profile_manager import get_profile_prompt_context
 from src.rate_limiter import global_rate_limiter
 
 
@@ -124,12 +125,15 @@ async def run_multi_agent_debate(
     fisiologo_prompt = load_prompt_file("fisiologo_system.md")
     tattico_prompt = load_prompt_file("tattico_system.md")
     giudice_prompt = load_prompt_file("giudice_system.md")
+    profile_context = get_profile_prompt_context()
 
     # Contesto comune per il Round 1
     debate_input = (
+        f"{profile_context}\n\n"
         f"--- STORICO ALLENAMENTI RECENTI ---\n{history}\n\n"
         f"--- PIANO DI ALLENAMENTO ---\n{training_plan}\n\n"
-        f"--- DATI TELEMETRICI DELLA SESSIONE ---\n{training_data}"
+        f"--- DATI TELEMETRICI DELLA SESSIONE ---\n{training_data}\n\n"
+        "NOTA: Fai riferimento ai parametri correnti (peso, altezza, passo target) indicati nel PROFILO ATLETA."
     )
 
     print("\n🥊 [Debate] Avvio Round 1 in parallelo: Fisiologo (Difesa) vs Tattico (Accusa)...")
@@ -186,6 +190,7 @@ async def run_multi_agent_debate(
 
     # Costruzione contesto per il Round 2 (Giudice)
     judge_input = (
+        f"{profile_context}\n\n"
         f"=== DATI REALI DELLA SESSIONE (TELEMETRIA E METEO) ===\n{training_data}\n\n"
         f"=== PIANO DI ALLENAMENTO ===\n{training_plan}\n\n"
         f"=== STORICO ALLENAMENTI ===\n{history}\n\n"
@@ -195,6 +200,7 @@ async def run_multi_agent_debate(
         "RICORDA: parla direttamente all'atleta in prima persona come unico Head Coach. "
         "Usa un tono 'Tough Love': severo e inflessibile sulla disciplina e sui dati, "
         "ma complice, amichevole e incoraggiante. "
+        "Usa sempre i valori correnti indicati nel PROFILO ATLETA. "
         "NON citare e NON fare alcun riferimento alle analisi interne, al Fisiologo, al Tattico o al dibattito."
     )
 

@@ -63,3 +63,54 @@ def get_new_activities(client: Garmin) -> list[dict]:
         return activities
 
     return new_activities
+
+
+def import_historical_activities(client: Garmin, count: int) -> int:
+    """Scarica e memorizza le ultime N attività in formato sintetico nello storico.
+    
+    Operazione quota-safe (nessuna chiamata a Gemini). Aggiorna anche LAST_ACTIVITY_FILE
+    all'attività più recente per evitare di riprocessarla.
+    """
+    if count <= 0:
+        return 0
+
+    activities = client.get_activities(0, count)
+    if not activities:
+        return 0
+
+    # Ordine cronologico: dalla più vecchia alla più recente
+    activities.reverse()
+
+    from src.config import STORICO_FILE
+    from src.storage import save_last_activity_id
+    from src.telemetry import format_pace, format_seconds
+
+    lines = []
+    for act in activities:
+        act_id = str(act.get("activityId"))
+        act_name = act.get("activityName", "Attività")
+        act_type = (act.get("activityType") or {}).get("typeKey", "unknown")
+        start_time = act.get("startTimeLocal", "N/D")
+        dist_km = (act.get("distance") or 0) / 1000
+        dur_s = act.get("duration") or 0
+        avg_speed = act.get("averageSpeed") or 0
+        pace = format_pace(avg_speed)
+        avg_hr = act.get("averageHR", "N/D")
+        load = act.get("activityTrainingLoad", "N/D")
+        if isinstance(load, (int, float)):
+            load = f"{load:.0f}"
+
+        lines.append(
+            f"- [{start_time}] {act_name} ({act_type}): {dist_km:.2f} km in {format_seconds(dur_s)} | "
+            f"Passo: {pace} | FC: {avg_hr} bpm | Load: {load} (ID: {act_id})"
+        )
+
+    # Scrive nello storico
+    with open(STORICO_FILE, "a", encoding="utf-8") as f:
+        f.write("## Import Storico Pregresso (Onboarding)\n" + "\n".join(lines) + "\n\n---\n\n")
+
+    # Aggiorna last_activity_id con l'attività più recente
+    last_act_id = str(activities[-1].get("activityId"))
+    save_last_activity_id(last_act_id)
+
+    return len(lines)

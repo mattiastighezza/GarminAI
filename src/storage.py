@@ -15,6 +15,12 @@ def get_training_plan() -> str:
     return "Nessun piano di allenamento fornito. Valuta la sessione isolatamente."
 
 
+def save_training_plan(text: str) -> None:
+    """Salva o aggiorna il testo del piano di allenamento su file."""
+    with open(PIANO_FILE, "w", encoding="utf-8") as f:
+        f.write(text.strip())
+
+
 def read_history() -> str:
     """Legge gli ultimi 6000 caratteri dello storico allenamenti."""
     if STORICO_FILE.exists():
@@ -45,4 +51,35 @@ def get_last_activity_id() -> str | None:
     if os.path.exists(LAST_ACTIVITY_FILE):
         with open(LAST_ACTIVITY_FILE, "r") as f:
             return f.read().strip() or None
+    return None
+
+
+def get_last_run_summary() -> str | None:
+    """Estrae il testo dell'ultima sessione registrata (dati + report coach) dallo storico."""
+    if not STORICO_FILE.exists():
+        return None
+
+    with open(STORICO_FILE, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+
+    if not content:
+        return None
+
+    # Cerca l'ultimo blocco '## Attività '
+    parts = content.split("## Attività ")
+    if len(parts) > 1:
+        last_block = "## Attività " + parts[-1].strip()
+        # Se c'è un divisore successivo '---', prendi solo fino a lì
+        sub_parts = last_block.split("\n---\n")
+        summary = sub_parts[0].strip()
+        # Limita la lunghezza a max 3800 caratteri per stare in un unico messaggio Telegram
+        if len(summary) > 3800:
+            summary = summary[:3800] + "\n\n... (report troncato per lunghezza)"
+        return summary
+
+    # Fallback se non ci sono ancora blocchi '## Attività '
+    lines = [line for line in content.splitlines() if line.strip()]
+    if lines:
+        return "\n".join(lines[-25:])
+
     return None

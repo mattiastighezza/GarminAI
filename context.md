@@ -16,21 +16,35 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
 
 ## 3. Tech Stack & Vincoli di Sistema
 - **Runtime:** Python 3.15.1
-- **Librerie Core:** `garminconnect`, `google-genai` (SDK ufficiale v1+, client unificato), `python-dotenv`, `requests`, `httpx` (previsto per sviluppi futuri).
+- **Librerie Core:** `garminconnect`, `google-genai` (SDK ufficiale v1+, client unificato), `python-telegram-bot[job-queue]`, `python-dotenv`, `requests`, `httpx` (previsto per sviluppi futuri).
 - **Persistenza & File Locali:**
   - `.env`: Credenziali Garmin, API key Gemini, token e chat ID Telegram.
   - `~/.garmin_tokens`: Directory cache sessione OAuth Garmin (gestione MFA una tantum).
   - `~/.garmin_last_id.txt`: Registro ID ultima attività processata.
   - `piano_allenamento.txt`: Tabella di allenamento in testo libero.
   - `storico_allenamenti.md`: Log progressivo cumulativo delle sessioni e delle analisi AI.
-  - `profilo_atleta.json`: Scheda anagrafica e parametri fisiologici dinamici (previsto, attualmente hardcoded).
+  - `profilo_atleta.json`: Scheda anagrafica, antropometrica e parametri fisiologici dinamici (attivo da Fase 1).
   - `mock_data/`: Dataset simulati per lo sviluppo e test offline (`mock_data/running_activity.json`).
-  - `prompts/`: System prompt specializzati (`coach_system.md`, `fisiologo_system.md`, `tattico_system.md`, `giudice_system.md`).
+  - `prompts/`: System prompt specializzati dinamici (`coach_system.md`, `fisiologo_system.md`, `tattico_system.md`, `giudice_system.md`).
   - `ultime_direttive.json`: Cache degli ordini operativi dell'ultima seduta per la verifica nel feedback loop (previsto Fase 9).
 
 ---
 
 ## 4. Stato Attuale dell'Implementazione (Funzionante)
+- **Onboarding Interattivo & Profilo Utente Dinamico (Completata Fase 1 ✅):**
+  - **Persistenza & Profile Manager (`src/profile_manager.py` e `profilo_atleta.json`):**
+    - Tracciamento dinamico di: età, altezza (m/cm), peso corporeo, peso iniziale di riferimento, FC Max, Soglia Anaerobica (SAFC), passo target gara, gara obiettivo, data ultimo aggiornamento, flag `onboarding_completato`.
+    - Calcolo in tempo reale di **Indice di Massa Corporea (IMC)** con relativa categoria e **trend peso cumulativo** da inizio monitoraggio.
+    - Parser fisiologico rigorosamente posizionale: il 1° valore imposta sempre e unicamente la FC Max (100-240 bpm), il 2° valore la SAFC (80-220 bpm), senza riordini o forzature min/max.
+  - **Generalizzazione dei System Prompt AI (`prompts/`):**
+    - Rimossi tutti i parametri statici hardcoded (96 kg, 1.85 m, 5:35 min/km) da `coach_system.md`, `fisiologo_system.md`, `tattico_system.md` e `giudice_system.md`.
+    - Iniezione vincolante del blocco `=== PROFILO ATLETA & PARAMETRI DINAMICI ===` in Round 1 (Fisiologo/Tattico), Round 2 (Giudice) e fallback coach singolo in `src/debate.py` e `src/llm_service.py`.
+  - **Bot Telegram Interattivo (`src/bot.py` & flag `--bot` in `main.py`):**
+    - Procedura di onboarding guidato a 4 step con `ConversationHandler` e pulsanti inline nei messaggi (conferma default cardio 202/178, salta tabella, importazione storico Garmin 0, 5, 10).
+    - Tastiera a pulsanti fissa e persistente (Reply Keyboard) sempre visibile sotto la barra di scrittura (`📋 Profilo`, `🏃‍♂️ Ultima Run`, `⚖️ Peso`, `📏 Altezza`, `❤️ Soglie FC`, `📋 Piano`, `⚡ Target`, `📖 Aiuto`).
+    - Pulsanti inline sotto la scheda profilo per azioni rapide.
+    - Comandi di aggiornamento e consultazione istantanei: `/peso`, `/altezza`, `/fc`, `/fcmax`, `/safc`, `/piano`, `/target`, `/gara`, `/ultimarun` (estrae l'ultima sessione e il report AI dallo storico), `/reset_onboarding`, `/aiuto`.
+    - Import storico iniziale quota-safe (`src/garmin_client.py`) a costo zero di token LLM.
 - **Architettura Modulare (Completata Fase 0):** Codice suddiviso in package `src/` e orchestrato da `main.py` (`garmin-ai.py` mantenuto come backup):
   - `src/config.py`: Gestione configurazione centralizzata, percorsi e variabili d'ambiente.
   - `src/garmin_client.py`: Inizializzazione client Garmin e recupero nuove attività.
@@ -41,6 +55,8 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - `src/storage.py`: Gestione persistenza per piano di allenamento, storico e ID ultima attività.
   - `src/mock_client.py`: Emulatore offline di Garmin Connect per collaudo locale a costo zero.
   - `src/rate_limiter.py`: Gestione dinamica rate-limit Free Tier Gemini (sliding-window anti-429).
+  - `src/profile_manager.py`: Gestione persistenza profilo dinamico, calcolo IMC, trend peso e soglie.
+  - `src/bot.py`: Listener interattivo Telegram per onboarding e comandi rapidi atleta.
   - `prompts/`: System prompt specializzati per i diversi ruoli del coach e del dibattito.
 - **Rifiniture Tecniche & Robustezza (Completata Fase 8 ✅):**
   - **Modalità Mock Offline (`--mock`):** permette di eseguire l'intera pipeline (`python main.py --mock`) usando il dataset locale realistico `mock_data/running_activity.json`, senza interrogare Garmin Connect e senza alterare l'ID dell'attività reale né lo storico di produzione.
@@ -87,28 +103,26 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
 *Obiettivo:* Superare l'implementazione monolitica di `garmin-ai.py`.
 * **Implementazione effettuata:** Codice modularizzato in `src/` (`config.py`, `garmin_client.py`, `telemetry.py` con calcolo matematico di drift ed EF, `llm_service.py`, `notifier.py`, `storage.py`), nuovo entry point `main.py` ed esternalizzazione del prompt in `prompts/coach_system.md`.
 
-### FASE 1: Onboarding Interattivo & Profilo Utente Dinamico
-*Obiettivo:* Rendere il bot bidirezionale: al primo avvio acquisisce dati atleta, piano e storico pregresso; consente modifiche successive da chat (es. variazione peso).
-* **Dati e Persistenza (`profilo_atleta.json`):**
-  - Salvare: `eta`, `peso_kg`, `altezza_m`, `passo_target`, `obiettivo_gara`, `onboarding_completato`, `ultimo_aggiornamento`.
-  - Creare un modulo `profile_manager.py` con `load_profile()`, `save_profile()`, `update_field()`.
-* **Flusso Onboarding (`ConversationHandler` in `python-telegram-bot`):**
-  1. `/start`: Se `onboarding_completato == False`, avvia sequenza guidata; altrimenti mostra la scheda corrente.
-  2. Step 1: Chiede età e peso separati da virgola (es. `31, 96`).
-  3. Step 2: Chiede se c'è un piano pronto (testo incollato in chat o digitare `salta`).
-  4. Step 3: Chiede quante attività storiche pregresse importare da Garmin (`0`, `5`, `10`).
-* **Comandi Rapidi di Aggiornamento:**
-  - `/peso <valore>`: Aggiorna istantaneamente il peso nel JSON.
-  - `/piano <testo>`: Visualizza o sovrascrive `piano_allenamento.txt`.
-  - `/profilo`: Stampa riepilogo leggibile dei parametri correnti.
+### FASE 1: Onboarding Interattivo & Profilo Utente Dinamico [COMPLETATA ✅]
+*Obiettivo:* Rendere il bot bidirezionale: al primo avvio acquisisce dati atleta, piano e storico pregresso; consente modifiche successive da chat (peso, altezza, soglie FC, passo target).
+* **Implementazione effettuata:**
+  - Creato `src/profile_manager.py` e persistenza JSON in `profilo_atleta.json`: anagrafica atleta, peso, altezza, FC Max, SAFC, passo target, obiettivo gara, calcolo real-time di IMC e trend ponderale cumulativo.
+  - Creato il bot interattivo Telegram in `src/bot.py` (eseguibile via `python main.py --bot [--mock]`):
+    - Onboarding guidato a 4 step con bottoni inline per default cardio, skip tabella e import storico Garmin (0, 5, 10).
+    - Tastiera fissa (Reply Keyboard) sempre visibile sotto la chat per comandi rapidi a tocco singolo.
+    - Pulsanti inline sotto la scheda profilo per interazione istantanea.
+    - Comandi dedicati: `/peso`, `/altezza`, `/fc`, `/fcmax`, `/safc`, `/piano`, `/target`, `/gara`, `/ultimarun`, `/reset_onboarding`, `/aiuto`.
+    - Regola posizionale ferrea per le soglie cardiache: 1° valore = FC Max, 2° valore = SAFC.
+  - Generalizzati tutti i prompt in `prompts/` rimuovendo valori statici ed iniettando il profilo dinamico in Round 1 e Round 2 del Multi-Agent Debate.
+  - Implementato in `src/garmin_client.py` l'import storico iniziale quota-safe nello storico locale.
 
 ### FASE 2: Architettura a Demone Asincrono (`python-telegram-bot[job-queue]`)
-*Obiettivo:* Far convivere il listener Telegram per i comandi utente con il controllo periodico su Garmin.
+*Obiettivo:* Far convivere il listener Telegram per i comandi utente con il controllo periodico in background su Garmin Connect nello stesso processo.
 * **Come farlo:**
-  1. Installare `python-telegram-bot[job-queue]`.
-  2. Registrare comandi e `ConversationHandler` su `ApplicationBuilder`.
-  3. Aggiungere il job ciclico Garmin: `app.job_queue.run_repeating(callback_garmin, interval=900, first=10)`.
-  4. *Gestione Thread:* Poiché `garminconnect` è sincrona, eseguire le chiamate di fetch fuori dall'event loop asincrono tramite `await asyncio.to_thread(garmin.get_activities, 0, 5)` per non bloccare Telegram.
+  1. Utilizzare `python-telegram-bot[job-queue]` (già integrato nella base di `src/bot.py`).
+  2. Registrare il job periodico Garmin su `Application`: `app.job_queue.run_repeating(callback_garmin, interval=900, first=10)`.
+  3. *Gestione Thread non bloccante:* Eseguire il fetch sincrono di `garminconnect` su thread separato (`await asyncio.to_thread(garmin.get_activities, 0, 5)`) per non rallentare né bloccare le risposte della chat Telegram.
+  4. Non appena rilevata una nuova attività di corsa, lanciare in asincrono `analyze_with_gemini_async(...)` e recapitare il verdetto direttamente in chat.
 
 ### FASE 3: Matching Dinamico Seduta vs Piano & Calcolo Aderenza
 *Obiettivo:* Valutare la rispondenza dell'allenamento rispetto al piano, identificando automaticamente la seduta anche se eseguita in un giorno diverso da quello programmato.

@@ -651,3 +651,18 @@ Abbiamo 96 kg di potenza da trasformare in un motore efficiente: la forza ce l'h
 
 ---
 
+## Import Storico Pregresso (Onboarding)
+- [2026-10-28 07:15:00] Corsa mattutina - Test Mock (running): 10.04 km in 0:55:45 | Passo: 5:33 min/km | FC: 162.0 bpm | Load: 145 (ID: 9999999999)
+
+---
+
+## Import Storico Pregresso (Onboarding)
+- [2026-10-28 07:15:00] Corsa mattutina - Test Mock (running): 10.04 km in 0:55:45 | Passo: 5:33 min/km | FC: 162.0 bpm | Load: 145 (ID: 9999999999)
+
+---
+
+## Import Storico Pregresso (Onboarding)
+- [2026-10-28 07:15:00] Corsa mattutina - Test Mock (running): 10.04 km in 0:55:45 | Passo: 5:33 min/km | FC: 162.0 bpm | Load: 145 (ID: 9999999999)
+
+---
+

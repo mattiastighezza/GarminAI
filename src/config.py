@@ -19,6 +19,7 @@ LAST_ACTIVITY_FILE = os.path.expanduser("~/.garmin_last_id.txt")
 TOKEN_DIR = os.path.expanduser("~/.garmin_tokens")
 PIANO_FILE = BASE_DIR / "piano_allenamento.txt"
 STORICO_FILE = BASE_DIR / "storico_allenamenti.md"
+PROFILO_FILE = BASE_DIR / "profilo_atleta.json"
 PROMPTS_DIR = BASE_DIR / "prompts"
 
 # ── Garmin ─────────────────────────────────────────────────────────────────

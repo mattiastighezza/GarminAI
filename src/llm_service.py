@@ -15,6 +15,7 @@ from google.genai import types
 
 from src.config import GEMINI_API_KEY, GEMINI_MODELS, MAX_ATTEMPTS, PROMPTS_DIR
 from src.debate import run_multi_agent_debate
+from src.profile_manager import get_profile_prompt_context
 
 
 def _load_system_prompt() -> str:
@@ -43,7 +44,10 @@ def _analyze_single_agent_fallback(
 
     system_instruction = _load_system_prompt()
 
+    profile_context = get_profile_prompt_context()
+
     full_contents = (
+        f"{profile_context}\n\n"
         f"--- STORICO ALLENAMENTI E FEEDBACK PRECEDENTI ---\n{history}\n\n"
         f"--- PIANO DI ALLENAMENTO ---\n{training_plan}\n\n"
         f"--- DATI COMPLETI ALLENAMENTO ODIERNO ---\n{training_data}"
