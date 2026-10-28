@@ -116,6 +116,18 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - Generalizzati tutti i prompt in `prompts/` rimuovendo valori statici ed iniettando il profilo dinamico in Round 1 e Round 2 del Multi-Agent Debate.
   - Implementato in `src/garmin_client.py` l'import storico iniziale quota-safe nello storico locale.
 
+### FASE 1.1: Rifiniture UX Bot Telegram & Acquisizione Dati Atomica
+*Obiettivo:* Perfezionare l'interazione utente su Telegram eliminando ogni attrito di digitazione e garantendo controlli sempre visibili.
+* **1. Hamburger Menu Button (`set_my_commands`):**
+  - Configurare all'avvio del bot la lista comandi nativa Telegram tramite `app.bot.set_my_commands([BotCommand(...), ...])`.
+  - Mostrare a sinistra del tasto allegati il pulsante "Menu" con l'elenco completo dei comandi e una descrizione chiara e sintetica di ciascuno.
+* **2. Interfaccia Always-Interactive (Zero schermate senza tasti):**
+  - Non lasciare mai l'utente senza tasti da premere in nessuna schermata o stato.
+  - Mostrare sempre pulsanti contestuali o di default (es. `[ ❌ Annulla ]`, `[ 📋 Menu ]`, `[ ⏭️ Salta ]`) anche durante le richieste di input testuale.
+* **3. Acquisizione Dati Atomica (Step Singoli):**
+  - Riformulare l'onboarding e la raccolta dati scomponendo le richieste multiple in passaggi singoli atomici (un solo dato per step, zero separatori a virgola):
+    - Step 1: Età $\rightarrow$ Step 2: Altezza $\rightarrow$ Step 3: Peso $\rightarrow$ Step 4: FC Max $\rightarrow$ Step 5: SAFC $\rightarrow$ Step 6: Tabella Allenamento $\rightarrow$ Step 7: Storico Garmin.
+
 ### FASE 2: Architettura a Demone Asincrono (`python-telegram-bot[job-queue]`)
 *Obiettivo:* Far convivere il listener Telegram per i comandi utente con il controllo periodico in background su Garmin Connect nello stesso processo.
 * **Come farlo:**
@@ -169,6 +181,17 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - Creato `mock_data/running_activity.json` e la classe simulata `src/mock_client.py` (`MockGarminClient`) per consentire collaudi offline istantanei via `python main.py --mock`.
   - Creato `src/rate_limiter.py` con sliding-window su 60 secondi (target di sicurezza 12 RPM) e intervallo minimo anti-burst, integrato in `src/debate.py`.
   - Risolto il mancato aggiornamento di `~/.garmin_last_id.txt` in `main.py` per prevenire la ri-elaborazione continua della medesima sessione reale.
+
+### FASE 8.1: Hardening Rate Limiter & Protezione Quota Gemini (Anti-429 RPM & RPD)
+*Obiettivo:* Azzerare gli errori HTTP 429 su Gemini Free Tier gestendo attivamente sia il rate limit al minuto (RPM) che il tetto giornaliero di richieste (RPD) monitorati su Google AI Studio.
+* **Criticità rilevata:** L'agente Tattico riceve `[Tattico] Modello gemini-3.5-flash non disponibile (errore 429). Passo al modello successivo.` per sforamento dei limiti Free Tier su AI Studio.
+* **Come implementarlo:**
+  1. **Tracciamento Distinto RPM e RPD:** Integrare nel `GeminiRateLimiter` un contatore persistente delle chiamate giornaliere (`gemini_quota_tracker.json`) con reset a mezzanotte, per bloccare preventivamente le chiamate verso modelli che hanno esaurito l'RPD ed evitare tentativi inutili.
+  2. **Classificazione Intelligente dell'Errore 429:**
+     - Se l'errore 429 indica superamento dell'RPM (quota transitoria al minuto): applicare un backoff esponenziale con jitter (attesa di 10-20s) prima di tentare il fallback.
+     - Se l'errore 429 indica esaurimento dell'RPD (quota giornaliera): segnare immediatamente il modello come "esausto per oggi" nel tracker locale e passare al modello successivo nella catena di fallback.
+  3. **Pacing Adattivo & Fallback Sequenziale:** Se il tasso di richieste si avvicina alla soglia (es. > 10 RPM), commutare l'esecuzione di Fisiologo e Tattico da parallela a sequenziale con spacing di sicurezza garantito (es. 4-5 secondi tra le chiamate), evitando burst simultanei.
+  4. **Model Routing Ottimizzato per Quota:** Utilizzare modelli ultra-leggeri con quote RPD più generose per il Round 1 (Fisiologo e Tattico) e riservare i modelli a più alto contesto/reasoning al Giudice (Round 2).
 
 ### FASE 9: Ottimizzazione Architetturale Multi-Agent Debate & Feedback Loop
 *Obiettivo:* Rendere il dibattito a due round rigorosamente deterministico nei calcoli, strutturato tramite schemi JSON Pydantic, protetto da crash di formattazione Telegram ed evoluto a coach persistente verificando l'aderenza alle direttive della seduta precedente.
