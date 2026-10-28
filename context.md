@@ -31,19 +31,21 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
 ---
 
 ## 4. Stato Attuale dell'Implementazione (Funzionante)
-- **Onboarding Interattivo & Profilo Utente Dinamico (Completata Fase 1 ✅):**
+- **Onboarding Interattivo & Profilo Utente Dinamico (Completata Fase 1 & 1.1 ✅):**
   - **Persistenza & Profile Manager (`src/profile_manager.py` e `profilo_atleta.json`):**
     - Tracciamento dinamico di: età, altezza (m/cm), peso corporeo, peso iniziale di riferimento, FC Max, Soglia Anaerobica (SAFC), passo target gara, gara obiettivo, data ultimo aggiornamento, flag `onboarding_completato`.
     - Calcolo in tempo reale di **Indice di Massa Corporea (IMC)** con relativa categoria e **trend peso cumulativo** da inizio monitoraggio.
-    - Parser fisiologico rigorosamente posizionale: il 1° valore imposta sempre e unicamente la FC Max (100-240 bpm), il 2° valore la SAFC (80-220 bpm), senza riordini o forzature min/max.
+    - Parser fisiologici dedicati ed atomici (`parse_age`, `parse_height`, `parse_weight`, `parse_fc_max`, `parse_safc`, `parse_hr_thresholds`): validazione rigorosa per ciascun parametro senza necessità di separatori a virgola.
   - **Generalizzazione dei System Prompt AI (`prompts/`):**
     - Rimossi tutti i parametri statici hardcoded (96 kg, 1.85 m, 5:35 min/km) da `coach_system.md`, `fisiologo_system.md`, `tattico_system.md` e `giudice_system.md`.
     - Iniezione vincolante del blocco `=== PROFILO ATLETA & PARAMETRI DINAMICI ===` in Round 1 (Fisiologo/Tattico), Round 2 (Giudice) e fallback coach singolo in `src/debate.py` e `src/llm_service.py`.
-  - **Bot Telegram Interattivo (`src/bot.py` & flag `--bot` in `main.py`):**
-    - Procedura di onboarding guidato a 4 step con `ConversationHandler` e pulsanti inline nei messaggi (conferma default cardio 202/178, salta tabella, importazione storico Garmin 0, 5, 10).
-    - Tastiera a pulsanti fissa e persistente (Reply Keyboard) sempre visibile sotto la barra di scrittura (`📋 Profilo`, `🏃‍♂️ Ultima Run`, `⚖️ Peso`, `📏 Altezza`, `❤️ Soglie FC`, `📋 Piano`, `⚡ Target`, `📖 Aiuto`).
-    - Pulsanti inline sotto la scheda profilo per azioni rapide.
-    - Comandi di aggiornamento e consultazione istantanei: `/peso`, `/altezza`, `/fc`, `/fcmax`, `/safc`, `/piano`, `/target`, `/gara`, `/ultimarun` (estrae l'ultima sessione e il report AI dallo storico), `/reset_onboarding`, `/aiuto`.
+  - **Bot Telegram Interattivo & UX Avanzata (`src/bot.py` & flag `--bot` in `main.py`):**
+    - **Pulsante Menu Nativo Telegram (`MenuButtonCommands`):** configurato via `set_chat_menu_button` e `set_my_commands` con scope globale (`BotCommandScopeDefault`) e chat-specifico (`BotCommandScopeChat`), visibile a sinistra del campo di inserimento testo con 14 comandi e relative descrizioni.
+    - **Onboarding Atomico a 7 Step Singoli:** scomposizione della raccolta dati in passaggi univoci senza attrito (1. Età $\rightarrow$ 2. Altezza $\rightarrow$ 3. Peso $\rightarrow$ 4. FC Max $\rightarrow$ 5. SAFC $\rightarrow$ 6. Tabella Allenamento $\rightarrow$ 7. Storico Garmin).
+    - **Interfaccia Always-Interactive:** zero schermate o stati privi di controlli; tastiera contestuale persistente `get_cancel_keyboard()` con `[ ❌ Annulla ]`, inline keyboard su ogni prompt per default/skip/annulla, e rimozione definitiva di `ReplyKeyboardRemove()`.
+    - **Tastiera Fissa Persistente (Reply Keyboard):** `[ 📋 Profilo ] [ 🏃‍♂️ Ultima Run ]`, `[ ⚖️ Peso ] [ 📏 Altezza ] [ ❤️ Soglie FC ]`, `[ 📋 Piano ] [ ⚡ Target ] [ 📜 Lista Comandi ]`.
+    - **Centro Comandi Scorrevole (`/menu`, `/comandi`, `/aiuto` e tasto `📜 Lista Comandi`):** elenco completo dei comandi raggruppati per macro-aree con pulsantiera inline interattiva (`get_commands_inline_keyboard`).
+    - Comandi rapidi di aggiornamento e consultazione istantanei: `/menu`, `/peso`, `/altezza`, `/fc`, `/fcmax`, `/safc`, `/piano`, `/target`, `/gara`, `/ultimarun`, `/reset_onboarding`, `/aiuto`.
     - Import storico iniziale quota-safe (`src/garmin_client.py`) a costo zero di token LLM.
 - **Architettura Modulare (Completata Fase 0):** Codice suddiviso in package `src/` e orchestrato da `main.py` (`garmin-ai.py` mantenuto come backup):
   - `src/config.py`: Gestione configurazione centralizzata, percorsi e variabili d'ambiente.
@@ -116,17 +118,13 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
   - Generalizzati tutti i prompt in `prompts/` rimuovendo valori statici ed iniettando il profilo dinamico in Round 1 e Round 2 del Multi-Agent Debate.
   - Implementato in `src/garmin_client.py` l'import storico iniziale quota-safe nello storico locale.
 
-### FASE 1.1: Rifiniture UX Bot Telegram & Acquisizione Dati Atomica
+### FASE 1.1: Rifiniture UX Bot Telegram & Acquisizione Dati Atomica [COMPLETATA ✅]
 *Obiettivo:* Perfezionare l'interazione utente su Telegram eliminando ogni attrito di digitazione e garantendo controlli sempre visibili.
-* **1. Hamburger Menu Button (`set_my_commands`):**
-  - Configurare all'avvio del bot la lista comandi nativa Telegram tramite `app.bot.set_my_commands([BotCommand(...), ...])`.
-  - Mostrare a sinistra del tasto allegati il pulsante "Menu" con l'elenco completo dei comandi e una descrizione chiara e sintetica di ciascuno.
-* **2. Interfaccia Always-Interactive (Zero schermate senza tasti):**
-  - Non lasciare mai l'utente senza tasti da premere in nessuna schermata o stato.
-  - Mostrare sempre pulsanti contestuali o di default (es. `[ ❌ Annulla ]`, `[ 📋 Menu ]`, `[ ⏭️ Salta ]`) anche durante le richieste di input testuale.
-* **3. Acquisizione Dati Atomica (Step Singoli):**
-  - Riformulare l'onboarding e la raccolta dati scomponendo le richieste multiple in passaggi singoli atomici (un solo dato per step, zero separatori a virgola):
-    - Step 1: Età $\rightarrow$ Step 2: Altezza $\rightarrow$ Step 3: Peso $\rightarrow$ Step 4: FC Max $\rightarrow$ Step 5: SAFC $\rightarrow$ Step 6: Tabella Allenamento $\rightarrow$ Step 7: Storico Garmin.
+* **Implementazione effettuata:**
+  - **Menu Hamburger Nativo (`set_my_commands` & `MenuButtonCommands`):** configurato via `set_chat_menu_button` e `set_my_commands` (scope default e chat specifica), visualizzando il pulsante nativo "Menu" a sinistra della barra di scrittura con tutti i 14 comandi e le relative descrizioni.
+  - **Interfaccia Always-Interactive:** eliminato qualsiasi azzeramento della tastiera (`ReplyKeyboardRemove`); garantito il pulsante persistente `[ ❌ Annulla ]` tramite `get_cancel_keyboard()` e pulsanti inline dedicati (default, skip, annulla) in tutti gli step.
+  - **Acquisizione Dati Atomica a 7 Step Singoli:** scomposizione della raccolta parametri in passaggi singoli atomici (1. Età $\rightarrow$ 2. Altezza $\rightarrow$ 3. Peso $\rightarrow$ 4. FC Max $\rightarrow$ 5. SAFC $\rightarrow$ 6. Tabella Allenamento $\rightarrow$ 7. Storico Garmin) supportati da parser dedicati (`parse_age`, `parse_height`, `parse_weight`, `parse_fc_max`, `parse_safc`).
+  - **Centro Comandi Scorrevole (`/menu`, `/comandi`, `/aiuto` e pulsante `📜 Lista Comandi`):** panoramica dettagliata di tutti i comandi raggruppati per funzione con tastiera inline interattiva (`get_commands_inline_keyboard`).
 
 ### FASE 2: Architettura a Demone Asincrono (`python-telegram-bot[job-queue]`)
 *Obiettivo:* Far convivere il listener Telegram per i comandi utente con il controllo periodico in background su Garmin Connect nello stesso processo.

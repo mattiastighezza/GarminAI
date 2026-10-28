@@ -666,3 +666,17 @@ Abbiamo 96 kg di potenza da trasformare in un motore efficiente: la forza ce l'h
 
 ---
 
+## Import Storico Pregresso (Onboarding)
+- [2026-10-18 11:48:06] Parma Camminata (walking): 2.03 km in 0:28:59 | Passo: 14:18 min/km | FC: 102.0 bpm | Load: 5 (ID: 24765795059)
+- [2026-10-23 12:33:15] Parma Corsa (running): 5.45 km in 0:34:07 | Passo: 6:16 min/km | FC: 150.0 bpm | Load: 82 (ID: 24823989609)
+- [2026-10-25 08:48:46] Montechiarugolo Camminata (walking): 10.71 km in 1:57:26 | Passo: 10:58 min/km | FC: 94.0 bpm | Load: 26 (ID: 24844066048)
+- [2026-10-25 19:14:16] Parma Corsa (running): 8.77 km in 0:55:29 | Passo: 6:20 min/km | FC: 158.0 bpm | Load: 136 (ID: 24850721446)
+- [2026-10-27 19:11:42] Parma Corsa (running): 8.75 km in 0:55:06 | Passo: 6:18 min/km | FC: 154.0 bpm | Load: 130 (ID: 24873249537)
+
+---
+
+## Import Storico Pregresso (Onboarding)
+- [2026-10-28 07:15:00] Corsa mattutina - Test Mock (running): 10.04 km in 0:55:45 | Passo: 5:33 min/km | FC: 162.0 bpm | Load: 145 (ID: 9999999999)
+
+---
+

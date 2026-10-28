@@ -1,18 +1,19 @@
 """
-bot.py - Bot Telegram interattivo per Onboarding e gestione profilo (Fase 1).
+bot.py - Bot Telegram interattivo per Onboarding e gestione profilo (Fase 1 e Fase 1.1).
 
 Fornisce:
-- Tastiera persistente a pulsanti sempre visibile sotto la barra di chat:
+- Hamburger Menu Button nativo ('set_my_commands'): lista comandi nativa Telegram sempre
+  accessibile a sinistra del campo di inserimento testo.
+- Interfaccia Always-Interactive (Zero schermate senza tasti): tastiera di default, opzioni inline
+  e pulsante di annullamento sempre visibili durante ogni passaggio.
+- Acquisizione Dati Atomica (Step Singoli):
+  Step 1: Età -> Step 2: Altezza -> Step 3: Peso -> Step 4: FC Max -> Step 5: SAFC -> Step 6: Piano -> Step 7: Storico.
+- Tastiera persistente fissa sotto la barra di scrittura (Reply Keyboard):
   [ 📋 Profilo ] [ 🏃‍♂️ Ultima Run ]
   [ ⚖️ Peso ] [ 📏 Altezza ] [ ❤️ Soglie FC ]
-  [ 📋 Piano ] [ ⚡ Target ] [ 📖 Aiuto ]
-- Pulsanti Inline interattivi direttamente nei messaggi:
-  - Nello Step 2 dell'Onboarding (conferma default cardio o personalizza).
-  - Nello Step 3 dell'Onboarding (salta inserimento piano).
-  - Nello Step 4 dell'Onboarding (selezione 0, 5, 10 attività storiche).
-  - Sotto la scheda /profilo e /start per azioni rapide con un click.
-- Flusso guidato di onboarding (/start) con ConversationHandler compatibile con click e testo.
-- Comandi rapidi di aggiornamento e consultazione (/peso, /altezza, /fc, /piano, /profilo, /ultimarun).
+  [ 📋 Piano ] [ ⚡ Target ] [ 📜 Lista Comandi ]
+- Pulsanti Inline interattivi direttamente nei messaggi per default, skip e azioni veloci.
+- Comandi rapidi (/menu, /peso, /altezza, /fc, /fcmax, /safc, /piano, /profilo, /ultimarun, /target, /gara, /reset_onboarding, /aiuto).
 - Controllo di sicurezza sull'ID mittente (TELEGRAM_CHAT_ID).
 """
 
@@ -22,13 +23,18 @@ import re
 from typing import Any
 
 from telegram import (
+    BotCommand,
+    BotCommandScopeChat,
+    BotCommandScopeDefault,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    MenuButtonCommands,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Update,
 )
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -43,8 +49,11 @@ from src.profile_manager import (
     compute_bmi,
     format_profile_summary,
     load_profile,
+    parse_age,
+    parse_fc_max,
     parse_height,
     parse_hr_thresholds,
+    parse_safc,
     parse_step1_inputs,
     parse_weight,
     reset_profile,
@@ -61,10 +70,19 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("GarminAIBot")
 
-# Stati della conversazione di onboarding
-STEP_BODY, STEP_CARDIO, STEP_PLAN, STEP_HISTORY = range(4)
+# Stati della conversazione di onboarding atomico a 7 step
+(
+    STEP_AGE,
+    STEP_HEIGHT,
+    STEP_WEIGHT,
+    STEP_FCMAX,
+    STEP_SAFC,
+    STEP_PLAN,
+    STEP_HISTORY,
+) = range(7)
 
 
 def is_authorized(chat_id: int | str) -> bool:
@@ -79,10 +97,19 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         ["📋 Profilo", "🏃‍♂️ Ultima Run"],
         ["⚖️ Peso", "📏 Altezza", "❤️ Soglie FC"],
-        ["📋 Piano", "⚡ Target", "📖 Aiuto"],
+        ["📋 Piano", "⚡ Target", "📜 Lista Comandi"],
     ]
     return ReplyKeyboardMarkup(
         keyboard,
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def get_cancel_keyboard() -> ReplyKeyboardMarkup:
+    """Tastiera fissa contestuale durante l'input: garantisce zero schermate senza tasti."""
+    return ReplyKeyboardMarkup(
+        [["❌ Annulla"]],
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -100,13 +127,77 @@ def get_profile_inline_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🏃‍♂️ Ultima Run", callback_data="btn_ultimarun"),
         ],
         [
+            InlineKeyboardButton("📜 Lista Comandi", callback_data="btn_menu"),
             InlineKeyboardButton("🔄 Riesegui Onboarding", callback_data="btn_reset_onb"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-# ── HANDLER ONBOARDING (/start) ──────────────────────────────────────────────
+def get_commands_inline_keyboard() -> InlineKeyboardMarkup:
+    """Restituisce una tastiera inline interattiva con tutti i comandi disponibili."""
+    keyboard = [
+        [
+            InlineKeyboardButton("🏃‍♂️ Ultima Run", callback_data="btn_ultimarun"),
+            InlineKeyboardButton("📋 Profilo Atleta", callback_data="btn_profilo"),
+        ],
+        [
+            InlineKeyboardButton("⚖️ Aggiorna Peso", callback_data="btn_peso"),
+            InlineKeyboardButton("📏 Aggiorna Altezza", callback_data="btn_altezza"),
+            InlineKeyboardButton("❤️ Soglie FC", callback_data="btn_fc"),
+        ],
+        [
+            InlineKeyboardButton("📋 Tabella Piano", callback_data="btn_piano"),
+            InlineKeyboardButton("⚡ Passo Target", callback_data="btn_target"),
+            InlineKeyboardButton("🎯 Gara Obiettivo", callback_data="btn_gara"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Riesegui Onboarding", callback_data="btn_reset_onb"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def set_bot_commands(application: Application) -> None:
+    """Configura la lista comandi nativa Telegram e attiva il pulsante Menu."""
+    commands = [
+        BotCommand("start", "Avvia o apri il menu principale"),
+        BotCommand("menu", "Mostra la lista completa dei comandi"),
+        BotCommand("profilo", "Scheda anagrafica, FC e parametri atleta"),
+        BotCommand("ultimarun", "Ultima sessione e report AI coach"),
+        BotCommand("peso", "Visualizza o aggiorna peso (es. /peso 73.8)"),
+        BotCommand("altezza", "Visualizza o aggiorna altezza (es. /altezza 1.85)"),
+        BotCommand("fc", "Aggiorna entrambe le soglie FC (/fc 195 172)"),
+        BotCommand("fcmax", "Aggiorna solo FC Max (es. /fcmax 202)"),
+        BotCommand("safc", "Aggiorna solo Soglia SAFC (es. /safc 178)"),
+        BotCommand("piano", "Visualizza o imposta tabella allenamento"),
+        BotCommand("target", "Aggiorna passo gara obiettivo (es. /target 5:35)"),
+        BotCommand("gara", "Aggiorna nome della gara obiettivo"),
+        BotCommand("reset_onboarding", "Reimposta profilo e riesegui onboarding"),
+        BotCommand("aiuto", "Guida comandi e istruzioni d'uso"),
+    ]
+    try:
+        # 1. Configura comandi a livello globale (default)
+        await application.bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+        # 2. Attiva esplicitamente il pulsante nativo Menu (MenuButtonCommands) a sinistra della barra testo
+        await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        logger.info("Menu nativo Telegram (set_my_commands + MenuButtonCommands) configurato.")
+
+        # 3. Se TELEGRAM_CHAT_ID è valorizzato, imposta immediatamente anche lo scope specifico della chat
+        # per forzare l'aggiornamento istantaneo dell'interfaccia client senza attendere la cache
+        if TELEGRAM_CHAT_ID:
+            try:
+                cid = int(str(TELEGRAM_CHAT_ID).strip())
+                await application.bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=cid))
+                await application.bot.set_chat_menu_button(chat_id=cid, menu_button=MenuButtonCommands())
+                logger.info("Menu nativo Telegram registrato istantaneamente per chat_id=%s", cid)
+            except Exception as e_cid:
+                logger.debug("Configurazione chat-specific menu: %s", e_cid)
+    except Exception as e:
+        logger.warning("Impossibile registrare set_my_commands: %s", e)
+
+
+# ── HANDLER ONBOARDING ATOMICO (/start) ──────────────────────────────────────
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -130,136 +221,342 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             msg,
             reply_markup=get_main_keyboard(),
         )
-        # Mostra anche i pulsanti inline per azione immediata
         await update.message.reply_text(
             "💡 Azioni rapide con un click:",
             reply_markup=get_profile_inline_keyboard(),
         )
         return ConversationHandler.END
 
-    # Avvio flusso onboarding guidato
+    # Avvio flusso onboarding guidato atomico (Step 1/7)
     welcome_msg = (
-        "🏃‍♂️ Benvenuto nel tuo Garmin AI Coach!\n\n"
-        "Configuriamo il tuo profilo atleta in 4 semplici passaggi.\n\n"
-        "👉 Step 1/4: Dati Antropometrici\n"
-        "Indica la tua età, altezza e peso separati da virgola (es. `58, 1.85, 74` oppure `58, 185cm, 74kg`).\n\n"
-        "*(Se ometti l'altezza, es. `58, 74`, verrà mantenuta l'altezza standard di 1.85 m)*\n\n"
-        "Digita /annulla in qualsiasi momento per interrompere."
+        "🏃‍♂️ **Benvenuto nel tuo Garmin AI Coach!**\n\n"
+        "Configuriamo il tuo profilo atleta in **7 passaggi singoli atomici** "
+        "(un solo dato per volta, zero separatori a virgola).\n\n"
+        "👉 **Step 1/7: Età**\n"
+        "Quanti anni hai? Inserisci solo il numero (es. `31` o `58`).\n\n"
+        "*(Tocca '❌ Annulla' in qualsiasi momento per interrompere)*"
     )
-    await update.message.reply_text(welcome_msg, reply_markup=ReplyKeyboardRemove())
-    return STEP_BODY
+    inline_kb = [
+        [InlineKeyboardButton("❌ Annulla Procedura", callback_data="onb_cancel")]
+    ]
+    await update.message.reply_text(
+        welcome_msg,
+        reply_markup=get_cancel_keyboard(),
+    )
+    await update.message.reply_text(
+        "💡 Inserisci la tua età nella casella di testo:",
+        reply_markup=InlineKeyboardMarkup(inline_kb),
+    )
+    return STEP_AGE
 
 
-async def step_body_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 1: Riceve e valida età, altezza e peso."""
-    text = update.message.text or ""
-    age, height, weight = parse_step1_inputs(text)
+async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point da pulsante inline '🚀 Avvia Onboarding'."""
+    query = update.callback_query
+    await query.answer()
 
-    if age is None or weight is None:
-        await update.message.reply_text(
-            "⚠️ Formato non riconosciuto.\n"
-            "Inserisci almeno età e peso separati da virgola (es. `58, 1.85, 74` o `58, 74`).\n\n"
-            "Riprova oppure digita /annulla."
+    if not is_authorized(query.message.chat_id):
+        await query.message.reply_text(
+            "⛔ Accesso non autorizzato. Questo bot è riservato all'atleta titolare."
         )
-        return STEP_BODY
+        return ConversationHandler.END
+
+    welcome_msg = (
+        "🏃‍♂️ **Benvenuto nel tuo Garmin AI Coach!**\n\n"
+        "Configuriamo il tuo profilo atleta in **7 passaggi singoli atomici** "
+        "(un solo dato per volta, zero separatori a virgola).\n\n"
+        "👉 **Step 1/7: Età**\n"
+        "Quanti anni hai? Inserisci solo il numero (es. `31` o `58`).\n\n"
+        "*(Tocca '❌ Annulla' in qualsiasi momento per interrompere)*"
+    )
+    inline_kb = [
+        [InlineKeyboardButton("❌ Annulla Procedura", callback_data="onb_cancel")]
+    ]
+    await query.message.reply_text(
+        welcome_msg,
+        reply_markup=get_cancel_keyboard(),
+    )
+    await query.message.reply_text(
+        "💡 Inserisci la tua età nella casella di testo:",
+        reply_markup=InlineKeyboardMarkup(inline_kb),
+    )
+    return STEP_AGE
+
+
+async def step_age_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 1/7: Riceve e valida l'età anagrafica."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+
+    age = parse_age(text)
+    if age is None:
+        inline_kb = [
+            [InlineKeyboardButton("❌ Annulla Procedura", callback_data="onb_cancel")]
+        ]
+        await update.message.reply_text(
+            "⚠️ Valore età non valido.\n"
+            "Inserisci un'età compresa tra 15 e 100 anni (es. `31` o `58`).\n\n"
+            "Riprova oppure tocca '❌ Annulla':",
+            reply_markup=InlineKeyboardMarkup(inline_kb),
+        )
+        return STEP_AGE
 
     update_field("eta", age)
+
+    inline_kb = [
+        [InlineKeyboardButton("⏭️ Mantieni Default (1.85 m)", callback_data="height_default")],
+        [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+    ]
+    msg = (
+        f"✅ Età registrata: **{age} anni**!\n\n"
+        "👉 **Step 2/7: Altezza**\n"
+        "Quanto sei alto? Inserisci l'altezza in metri o centimetri (es. `1.85` o `185`).\n\n"
+        "• Oppure tocca il pulsante '⏭️ Mantieni Default (1.85 m)' qui sotto."
+    )
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
+    return STEP_HEIGHT
+
+
+async def handle_height_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, choice_val: str) -> int:
+    """Elabora l'altezza (da testo o callback)."""
+    text = choice_val.strip().lower()
+
+    if "default" in text:
+        height = 1.85
+        alt_str = "1.85 m (predefinita)"
+    else:
+        height = parse_height(choice_val)
+        if height is None:
+            err_msg = (
+                "⚠️ Valore altezza non valido.\n"
+                "Inserisci un'altezza compresa tra 1.20 e 2.30 m (es. `1.85` o `185`), "
+                "oppure tocca il pulsante per il default (1.85 m):"
+            )
+            inline_kb = [
+                [InlineKeyboardButton("⏭️ Default (1.85 m)", callback_data="height_default")],
+                [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+            ]
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            else:
+                await update.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            return STEP_HEIGHT
+        alt_str = f"{height} m"
+
+    update_field("altezza_m", height)
+
+    send_target = update.callback_query.message if update.callback_query else update.message
+    if update.callback_query:
+        await update.callback_query.answer()
+
+    inline_kb = [
+        [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")]
+    ]
+    msg = (
+        f"✅ Altezza registrata: **{alt_str}**!\n\n"
+        "👉 **Step 3/7: Peso Corporeo**\n"
+        "Qual è il tuo peso attuale in kg? (es. `96.0` o `74.5`).\n\n"
+        "💡 *Il peso corporeo è determinante per il calcolo del costo energetico al km "
+        "(+35-40% per atleti di peso elevato), dell'IMC e dell'impatto biomeccanico articolare.*"
+    )
+    await send_target.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
+    return STEP_WEIGHT
+
+
+async def step_height_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 2/7 via testo inserito."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+    return await handle_height_choice(update, context, text)
+
+
+async def step_height_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 2/7 via click su pulsante inline default."""
+    query = update.callback_query
+    return await handle_height_choice(update, context, query.data)
+
+
+async def step_weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 3/7: Riceve e valida il peso corporeo."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+
+    weight = parse_weight(text)
+    if weight is None:
+        inline_kb = [
+            [InlineKeyboardButton("❌ Annulla Procedura", callback_data="onb_cancel")]
+        ]
+        await update.message.reply_text(
+            "⚠️ Valore peso non valido.\n"
+            "Inserisci un peso valido compreso tra 40 e 200 kg (es. `96.0` o `74.5`).\n\n"
+            "Riprova oppure tocca '❌ Annulla':",
+            reply_markup=InlineKeyboardMarkup(inline_kb),
+        )
+        return STEP_WEIGHT
+
     update_field("peso_kg", weight)
     profile = load_profile()
     if not profile.get("peso_iniziale_kg"):
         update_field("peso_iniziale_kg", weight)
 
-    if height:
-        update_field("altezza_m", height)
-        alt_str = f"{height} m"
-    else:
-        alt_str = f"{profile.get('altezza_m', 1.85)} m (predefinita)"
+    height = profile.get("altezza_m", 1.85)
+    bmi_val, bmi_cat = compute_bmi(weight, height)
 
-    alt_effettiva = height or profile.get("altezza_m", 1.85)
-    bmi_val, bmi_cat = compute_bmi(weight, alt_effettiva)
-
-    # Pulsanti inline visibili direttamente nel messaggio dello Step 2
     inline_kb = [
-        [
-            InlineKeyboardButton(
-                "✅ Usa Default (202 Max, 178 SAFC)", callback_data="cardio_default"
-            )
-        ],
-        [
-            InlineKeyboardButton("⏭️ Salta", callback_data="cardio_skip")
-        ],
+        [InlineKeyboardButton("✅ Usa Default (202 bpm)", callback_data="fcmax_default")],
+        [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
     ]
-    reply_markup = InlineKeyboardMarkup(inline_kb)
-
     msg = (
-        f"✅ Dati registrati: {age} anni | {alt_str} | {weight} kg (IMC: {bmi_val} - {bmi_cat})!\n\n"
-        "👉 Step 2/4: Soglie Fisiologiche e Cardio\n"
-        "Le soglie FC permettono all'AI di valutare la deriva cardiaca e le zone di allenamento.\n\n"
-        "• Clicca sul pulsante qui sotto per confermare i valori default (**202 bpm Max, 178 bpm SAFC**);\n"
-        "• Oppure digita in chat i tuoi valori personalizzati separati da virgola (es. `195, 172`)."
+        f"✅ Peso registrato: **{weight} kg** (IMC: {bmi_val} - {bmi_cat})!\n\n"
+        "👉 **Step 4/7: Frequenza Cardiaca Massima (FC Max)**\n"
+        "Qual è la tua frequenza cardiaca massima in bpm? (es. `202`).\n\n"
+        "• Tocca '✅ Usa Default (202 bpm)' qui sotto per confermare il valore di riferimento;\n"
+        "• Oppure digita in chat il tuo valore personalizzato (100-240 bpm)."
     )
-    await update.message.reply_text(msg, reply_markup=reply_markup)
-    return STEP_CARDIO
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
+    return STEP_FCMAX
 
 
-async def handle_cardio_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, choice_text: str) -> int:
-    """Logica comune per processare la scelta cardio (da click inline o testo)."""
-    text = choice_text.strip().lower()
+async def handle_fcmax_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, choice_val: str) -> int:
+    """Elabora la FC Max (da testo o callback)."""
+    text = choice_val.strip().lower()
 
     if "default" in text:
-        update_field("fc_max", 202)
-        update_field("safc", 178)
-        reply = "✅ Impostate soglie default: 1° Valore (FC Max) 202 bpm | 2° Valore (SAFC) 178 bpm."
-    elif "skip" in text or "salta" in text:
-        reply = "ℹ️ Soglie cardio lasciate invariate."
+        fc_max = 202
+        desc = "202 bpm (predefinita)"
     else:
-        fc_max, safc = parse_hr_thresholds(choice_text)
-        if fc_max is not None:
-            update_field("fc_max", fc_max)
-        if safc is not None:
-            update_field("safc", safc)
-        reply = (
-            f"✅ Soglie registrate:\n"
-            f"• 1° Valore (FC Max): {fc_max or 'invariata'} bpm\n"
-            f"• 2° Valore (Soglia SAFC): {safc or 'invariata'} bpm"
-        )
+        fc_max = parse_fc_max(choice_val)
+        if fc_max is None:
+            err_msg = (
+                "⚠️ Valore FC Max non valido (range 100-240 bpm).\n"
+                "Digita un numero intero (es. `202`) oppure tocca '✅ Usa Default (202 bpm)':"
+            )
+            inline_kb = [
+                [InlineKeyboardButton("✅ Usa Default (202 bpm)", callback_data="fcmax_default")],
+                [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+            ]
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            else:
+                await update.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            return STEP_FCMAX
+        desc = f"{fc_max} bpm"
 
-    inline_kb = [
-        [InlineKeyboardButton("⏭️ Salta inserimento piano", callback_data="plan_skip")]
-    ]
-    reply_markup = InlineKeyboardMarkup(inline_kb)
+    update_field("fc_max", fc_max)
 
-    msg = (
-        f"{reply}\n\n"
-        "👉 Step 3/4: Piano di Allenamento\n"
-        "Hai una tabella settimanale o un piano di allenamento?\n\n"
-        "• Incolla qui in chat il testo del tuo piano;\n"
-        "• Oppure tocca il pulsante 'Salta inserimento piano' qui sotto."
-    )
-
+    send_target = update.callback_query.message if update.callback_query else update.message
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text(msg, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(msg, reply_markup=reply_markup)
 
+    inline_kb = [
+        [InlineKeyboardButton("✅ Usa Default (178 bpm)", callback_data="safc_default")],
+        [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+    ]
+    msg = (
+        f"✅ FC Max registrata: **{desc}**!\n\n"
+        "👉 **Step 5/7: Soglia Anaerobica (SAFC)**\n"
+        "A quanti bpm si colloca la tua soglia anaerobica? (es. `178`).\n\n"
+        "• Tocca '✅ Usa Default (178 bpm)' qui sotto per confermare il valore di riferimento;\n"
+        "• Oppure digita in chat il tuo valore personalizzato (80-220 bpm)."
+    )
+    await send_target.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
+    return STEP_SAFC
+
+
+async def step_fcmax_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 4/7 via testo."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+    return await handle_fcmax_choice(update, context, text)
+
+
+async def step_fcmax_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 4/7 via callback inline."""
+    query = update.callback_query
+    return await handle_fcmax_choice(update, context, query.data)
+
+
+async def handle_safc_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, choice_val: str) -> int:
+    """Elabora la Soglia Anaerobica SAFC (da testo o callback)."""
+    text = choice_val.strip().lower()
+
+    if "default" in text:
+        safc = 178
+        desc = "178 bpm (predefinita)"
+    else:
+        safc = parse_safc(choice_val)
+        if safc is None:
+            err_msg = (
+                "⚠️ Valore SAFC non valido (range 80-220 bpm).\n"
+                "Digita un numero intero (es. `178`) oppure tocca '✅ Usa Default (178 bpm)':"
+            )
+            inline_kb = [
+                [InlineKeyboardButton("✅ Usa Default (178 bpm)", callback_data="safc_default")],
+                [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+            ]
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            else:
+                await update.message.reply_text(
+                    err_msg, reply_markup=InlineKeyboardMarkup(inline_kb)
+                )
+            return STEP_SAFC
+        desc = f"{safc} bpm"
+
+    update_field("safc", safc)
+
+    send_target = update.callback_query.message if update.callback_query else update.message
+    if update.callback_query:
+        await update.callback_query.answer()
+
+    inline_kb = [
+        [InlineKeyboardButton("⏭️ Salta Inserimento Piano", callback_data="plan_skip")],
+        [InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel")],
+    ]
+    msg = (
+        f"✅ Soglia Anaerobica (SAFC) registrata: **{desc}**!\n\n"
+        "👉 **Step 6/7: Tabella / Piano di Allenamento**\n"
+        "Hai un programma settimanale o una tabella di allenamento?\n\n"
+        "• Incolla qui in chat il testo della tabella;\n"
+        "• Oppure tocca '⏭️ Salta Inserimento Piano' qui sotto per farlo in un secondo momento."
+    )
+    await send_target.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
     return STEP_PLAN
 
 
-async def step_cardio_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 2 via messaggio di testo."""
-    return await handle_cardio_choice(update, context, update.message.text or "")
+async def step_safc_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 5/7 via testo."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+    return await handle_safc_choice(update, context, text)
 
 
-async def step_cardio_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 2 via click pulsante inline."""
+async def step_safc_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Step 5/7 via callback inline."""
     query = update.callback_query
-    data = query.data
-    return await handle_cardio_choice(update, context, data)
+    return await handle_safc_choice(update, context, query.data)
 
 
 async def handle_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, plan_text: str) -> int:
-    """Logica comune per il piano di allenamento."""
+    """Elabora il piano di allenamento."""
     text = plan_text.strip()
     if text.lower() in ("plan_skip", "salta", "/salta", "skip"):
         reply = "ℹ️ Piano saltato per il momento. Potrai aggiungerlo in seguito con `/piano <testo>`."
@@ -267,59 +564,72 @@ async def handle_plan_choice(update: Update, context: ContextTypes.DEFAULT_TYPE,
         save_training_plan(text)
         reply = f"✅ Piano di allenamento memorizzato con successo ({len(text)} caratteri salvati)!"
 
+    send_target = update.callback_query.message if update.callback_query else update.message
+    if update.callback_query:
+        await update.callback_query.answer()
+
     inline_kb = [
         [
             InlineKeyboardButton("0 (Nessuna)", callback_data="hist_0"),
             InlineKeyboardButton("5 (Consigliato)", callback_data="hist_5"),
             InlineKeyboardButton("10 (Dettagliato)", callback_data="hist_10"),
-        ]
+        ],
+        [
+            InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel"),
+        ],
     ]
-    reply_markup = InlineKeyboardMarkup(inline_kb)
-
     msg = (
         f"{reply}\n\n"
-        "👉 Step 4/4: Importazione Storico Garmin\n"
+        "👉 **Step 7/7: Importazione Storico Garmin**\n"
         "Quante attività passate vuoi importare per dare contesto pregresso all'AI Coach?\n\n"
         "Tocca uno dei pulsanti qui sotto:\n"
         "• 0: Storico pulito da zero\n"
         "• 5: Ultime 5 attività (Consigliato)\n"
         "• 10: Ultime 10 attività"
     )
-
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.message.reply_text(msg, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(msg, reply_markup=reply_markup)
-
+    await send_target.reply_text(msg, reply_markup=InlineKeyboardMarkup(inline_kb))
     return STEP_HISTORY
 
 
 async def step_plan_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 3 via testo incollato."""
-    return await handle_plan_choice(update, context, update.message.text or "")
+    """Step 6/7 via testo."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+    return await handle_plan_choice(update, context, text)
 
 
 async def step_plan_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 3 via click inline Salta."""
+    """Step 6/7 via click inline Salta."""
     query = update.callback_query
     return await handle_plan_choice(update, context, query.data)
 
 
 async def handle_history_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, choice_val: str) -> int:
-    """Logica comune per importazione storico pregresso e chiusura onboarding."""
+    """Importa lo storico pregresso e conclude l'onboarding atomico."""
     val = choice_val.replace("hist_", "").strip()
+    send_target = update.callback_query.message if update.callback_query else update.message
+
     if val not in ("0", "5", "10"):
-        msg_err = "⚠️ Risposta non valida. Tocca uno dei pulsanti (0, 5, 10)."
+        msg_err = "⚠️ Scelta non valida. Tocca uno dei pulsanti (0, 5, 10) oppure '❌ Annulla':"
+        inline_kb = [
+            [
+                InlineKeyboardButton("0 (Nessuna)", callback_data="hist_0"),
+                InlineKeyboardButton("5 (Consigliato)", callback_data="hist_5"),
+                InlineKeyboardButton("10 (Dettagliato)", callback_data="hist_10"),
+            ],
+            [
+                InlineKeyboardButton("❌ Annulla", callback_data="onb_cancel"),
+            ],
+        ]
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text(msg_err)
+            await update.callback_query.message.reply_text(msg_err, reply_markup=InlineKeyboardMarkup(inline_kb))
         else:
-            await update.message.reply_text(msg_err)
+            await update.message.reply_text(msg_err, reply_markup=InlineKeyboardMarkup(inline_kb))
         return STEP_HISTORY
 
     count = int(val)
-    send_target = update.callback_query.message if update.callback_query else update.message
     if update.callback_query:
         await update.callback_query.answer()
 
@@ -341,13 +651,13 @@ async def handle_history_choice(update: Update, context: ContextTypes.DEFAULT_TY
                 import_historical_activities, client, count
             )
             await send_target.reply_text(
-                f"✅ Importate con successo {imported_count} attività storiche nello storico locale!"
+                f"✅ Importate con successo {imported_count} attività nello storico locale!"
             )
         except Exception as e:
             logger.warning("Errore importazione storico in onboarding: %s", e)
             await send_target.reply_text(
                 f"⚠️ Non è stato possibile scaricare le attività da Garmin ({e}).\n"
-                "Nessun problema: lo storico si arricchirà con le prossime uscite."
+                "Nessun problema: lo storico si arricchirà progressivamente con le prossime corse."
             )
 
     update_field("onboarding_completato", True)
@@ -355,11 +665,11 @@ async def handle_history_choice(update: Update, context: ContextTypes.DEFAULT_TY
     summary = format_profile_summary(profile)
 
     final_msg = (
-        "🎉 Configurazione Onboarding Completata con Successo!\n\n"
+        "🎉 **Configurazione Onboarding Completata con Successo!**\n\n"
         f"{summary}\n\n"
-        "Il tuo AI Coach è pienamente operativo.\n"
-        "Da adesso in poi puoi usare comodamente la tastiera a pulsanti in basso "
-        "oppure i comandi rapidi per interagire con il coach."
+        "Il tuo AI Coach è ora pienamente operativo ed allineato ai tuoi parametri!\n"
+        "Usa i comandi nativi del Menu ☰ (a sinistra del campo di testo) "
+        "oppure la tastiera a pulsanti sempre attiva in basso."
     )
     await send_target.reply_text(
         final_msg,
@@ -369,22 +679,48 @@ async def handle_history_choice(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def step_history_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 4 via testo."""
-    return await handle_history_choice(update, context, update.message.text or "")
+    """Step 7/7 via testo."""
+    text = (update.message.text or "").strip()
+    if text in ("❌ Annulla", "annulla", "/annulla"):
+        return await cancel_handler(update, context)
+    return await handle_history_choice(update, context, text)
 
 
 async def step_history_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Step 4 via click inline."""
+    """Step 7/7 via click inline."""
     query = update.callback_query
     return await handle_history_choice(update, context, query.data)
 
 
-async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Annulla la procedura di onboarding."""
-    await update.message.reply_text(
-        "❌ Procedura interrotta. Puoi riprenderla in qualsiasi momento con /start.",
+async def onb_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Annulla la procedura guidata via click su pulsante inline."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text(
+        "❌ Procedura di configurazione interrotta.\n"
+        "Puoi riprenderla in qualsiasi momento digitando `/start`.",
         reply_markup=get_main_keyboard(),
     )
+    return ConversationHandler.END
+
+
+async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Annulla la procedura di onboarding (da comando o testo '❌ Annulla')."""
+    msg = (
+        "❌ Procedura di configurazione interrotta.\n"
+        "Puoi riprenderla in qualsiasi momento digitando `/start`."
+    )
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(
+            msg,
+            reply_markup=get_main_keyboard(),
+        )
+    elif update.message:
+        await update.message.reply_text(
+            msg,
+            reply_markup=get_main_keyboard(),
+        )
     return ConversationHandler.END
 
 
@@ -397,7 +733,7 @@ async def peso_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     profile = load_profile()
-    current_weight = profile.get("peso_kg", 74.0)
+    current_weight = profile.get("peso_kg", 96.0)
     initial_weight = profile.get("peso_iniziale_kg", current_weight)
     height = profile.get("altezza_m", 1.85)
 
@@ -405,12 +741,15 @@ async def peso_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         bmi_val, bmi_cat = compute_bmi(current_weight, height)
         trend_tot = round(current_weight - initial_weight, 1)
         trend_str = f" [Trend da inizio: {trend_tot:+.1f} kg]" if trend_tot != 0 else ""
+        inline_kb = [
+            [InlineKeyboardButton("📋 Scheda Profilo", callback_data="btn_profilo")],
+        ]
         await update.message.reply_text(
             f"⚖️ Peso corporeo registrato: {current_weight} kg{trend_str}\n"
             f"📊 Indice Massa Corporea (IMC): {bmi_val} ({bmi_cat})\n\n"
             "Per aggiornarlo scrivi:\n"
             "`/peso <valore>` (es. `/peso 73.8` oppure `/peso 73,5`)",
-            reply_markup=get_main_keyboard(),
+            reply_markup=InlineKeyboardMarkup(inline_kb),
         )
         return
 
@@ -449,16 +788,19 @@ async def altezza_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     profile = load_profile()
     current_height = profile.get("altezza_m", 1.85)
-    weight = profile.get("peso_kg", 74.0)
+    weight = profile.get("peso_kg", 96.0)
 
     if not context.args:
         bmi_val, bmi_cat = compute_bmi(weight, current_height)
+        inline_kb = [
+            [InlineKeyboardButton("📋 Scheda Profilo", callback_data="btn_profilo")],
+        ]
         await update.message.reply_text(
             f"📏 Altezza attuale: {current_height} m\n"
             f"📊 IMC calcolato: {bmi_val} ({bmi_cat})\n\n"
             "Per aggiornarla scrivi:\n"
             "`/altezza <valore>` (es. `/altezza 1.85` o `/altezza 185`)",
-            reply_markup=get_main_keyboard(),
+            reply_markup=InlineKeyboardMarkup(inline_kb),
         )
         return
 
@@ -494,6 +836,9 @@ async def fc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     current_safc = profile.get("safc", 178)
 
     if not context.args:
+        inline_kb = [
+            [InlineKeyboardButton("📋 Scheda Profilo", callback_data="btn_profilo")],
+        ]
         await update.message.reply_text(
             "❤️ SOGLIE CARDIACHE ATTUALI:\n"
             f"• 1° Valore (FC Max): {current_max} bpm\n"
@@ -502,7 +847,7 @@ async def fc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             "`/fc <fc_max> [safc]` (es. `/fc 198 178` oppure `/fc 198, 178`)\n\n"
             "💡 Regola: il 1° valore imposta SEMPRE la FC Max, il 2° valore la SAFC.\n"
             "💡 Oppure usa i comandi singoli: `/fcmax <valore>` o `/safc <valore>`.",
-            reply_markup=get_main_keyboard(),
+            reply_markup=InlineKeyboardMarkup(inline_kb),
         )
         return
 
@@ -518,7 +863,6 @@ async def fc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
         return
 
-    # Salva sempre rispettando l'ordine
     if new_max is not None:
         update_field("fc_max", new_max)
     if new_safc is not None:
@@ -550,14 +894,17 @@ async def fcmax_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    nums = [int(n) for n in re.findall(r"\b\d{2,3}\b", " ".join(context.args))]
-    if not nums or not (100 <= nums[0] <= 240):
-        await update.message.reply_text("⚠️ Valore FC Max non valido (range 100-240 bpm).")
+    val = parse_fc_max(" ".join(context.args))
+    if val is None:
+        await update.message.reply_text(
+            "⚠️ Valore FC Max non valido (range 100-240 bpm).",
+            reply_markup=get_main_keyboard(),
+        )
         return
 
-    update_field("fc_max", nums[0])
+    update_field("fc_max", val)
     await update.message.reply_text(
-        f"✅ FC Max aggiornata a: {nums[0]} bpm!",
+        f"✅ FC Max aggiornata a: {val} bpm!",
         reply_markup=get_main_keyboard(),
     )
 
@@ -578,14 +925,17 @@ async def safc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    nums = [int(n) for n in re.findall(r"\b\d{2,3}\b", " ".join(context.args))]
-    if not nums or not (80 <= nums[0] <= 220):
-        await update.message.reply_text("⚠️ Valore SAFC non valido (range 80-220 bpm).")
+    val = parse_safc(" ".join(context.args))
+    if val is None:
+        await update.message.reply_text(
+            "⚠️ Valore SAFC non valido (range 80-220 bpm).",
+            reply_markup=get_main_keyboard(),
+        )
         return
 
-    update_field("safc", nums[0])
+    update_field("safc", val)
     await update.message.reply_text(
-        f"✅ Soglia Anaerobica (SAFC) aggiornata a: {nums[0]} bpm!",
+        f"✅ Soglia Anaerobica (SAFC) aggiornata a: {val} bpm!",
         reply_markup=get_main_keyboard(),
     )
 
@@ -710,35 +1060,55 @@ async def reset_onboarding_command(update: Update, context: ContextTypes.DEFAULT
         return
 
     reset_profile()
+    inline_kb = [
+        [InlineKeyboardButton("🚀 Avvia Onboarding", callback_data="btn_start_onb")],
+        [InlineKeyboardButton("📋 Scheda Profilo", callback_data="btn_profilo")],
+    ]
     await update.message.reply_text(
         "🔄 Profilo atleta resettato!\n\n"
-        "Invia ora `/start` per riavviare la procedura guidata a 4 step con i pulsanti a schermo.",
-        reply_markup=ReplyKeyboardRemove(),
+        "Tocca '🚀 Avvia Onboarding' qui sotto oppure invia `/start` per riavviare "
+        "la procedura guidata atomica a 7 passaggi.",
+        reply_markup=InlineKeyboardMarkup(inline_kb),
     )
 
 
-async def aiuto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Comando /aiuto o click su '📖 Aiuto'."""
+async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mostra la lista completa, scorrevole e interattiva di tutti i comandi disponibili."""
     if not is_authorized(update.effective_chat.id):
         return
 
-    help_text = (
-        "📖 GUIDA COMANDI GARMIN AI COACH\n"
-        "───────────────────────────────\n"
-        "Tocca i pulsanti della tastiera in basso oppure digita:\n\n"
-        "• /profilo - Visualizza scheda anagrafica, FC e IMC\n"
-        "• /peso <valore> - Aggiorna il peso corporeo (es. `/peso 73.8`)\n"
-        "• /altezza <valore> - Imposta l'altezza in m o cm (es. `/altezza 1.85`)\n"
-        "• /fc <max> [safc] - Aggiorna FC Max e SAFC (es. `/fc 195 172`)\n"
-        "• /ultimarun - Consulta l'ultima corsa e il report del coach\n"
-        "• /piano [testo] - Mostra o aggiorna la tabella di allenamento\n"
-        "• /target <passo> - Aggiorna il passo gara (es. `/target 5:30`)\n"
-        "• /gara <nome> - Aggiorna la gara obiettivo\n"
-        "• /reset_onboarding - Riesegue l'onboarding guidato iniziale\n"
-        "• /start - Riapre il menu o avvia l'onboarding\n"
-        "───────────────────────────────"
+    text = (
+        "📜 **LISTA COMPLETA DEI COMANDI DISPONIBILI**\n"
+        "─────────────────────────────────\n"
+        "Scorri questa lista per consultare tutti i comandi, oppure tocca i pulsanti interattivi sottostanti:\n\n"
+        "🏃‍♂️ **ALLENAMENTO & TABELLA**\n"
+        "• `/ultimarun` — Mostra l'ultimo allenamento registrato e il verdetto AI\n"
+        "• `/piano` — Visualizza o aggiorna la tabella settimanale (`/piano <testo>`)\n"
+        "• `/target` — Modifica il passo gara obiettivo (es. `/target 5:35 min/km`)\n"
+        "• `/gara` — Modifica la gara programmata (es. `/gara Mezza Terre Verdiane`)\n\n"
+        "👤 **PROFILO & FISIOLOGIA ATLETA**\n"
+        "• `/profilo` — Scheda anagrafica, IMC calcolato, trend del peso e soglie FC\n"
+        "• `/peso` — Registra o aggiorna il peso corporeo (es. `/peso 73.8`)\n"
+        "• `/altezza` — Imposta l'altezza in metri o cm (es. `/altezza 1.85`)\n"
+        "• `/fc` — Aggiorna entrambe le soglie FC (`/fc <max> <safc>`, es. `/fc 195 172`)\n"
+        "• `/fcmax` — Aggiorna singolarmente solo la FC Max (es. `/fcmax 202`)\n"
+        "• `/safc` — Aggiorna singolarmente solo la Soglia Anaerobica (es. `/safc 178`)\n\n"
+        "⚙️ **CONFIGURAZIONE & SISTEMA**\n"
+        "• `/start` — Avvia la configurazione iniziale o mostra la scheda atleta\n"
+        "• `/menu` — Riapre questa lista completa e scorrevole dei comandi\n"
+        "• `/reset_onboarding` — Resetta il profilo e riavvia la procedura guidata a 7 step\n"
+        "• `/aiuto` — Guida rapida e sintesi\n"
+        "─────────────────────────────────\n"
+        "💡 *Tocca uno dei pulsanti qui sotto per un'azione rapida:*"
     )
-    await update.message.reply_text(help_text, reply_markup=get_main_keyboard())
+    await update.message.reply_text(
+        text,
+        reply_markup=get_commands_inline_keyboard(),
+    )
+
+
+# Alias per retrocompatibilità
+aiuto_command = menu_command
 
 
 # ── HANDLER CALLBACK PULSANTI INLINE GLOBALI ──────────────────────────────────
@@ -752,7 +1122,8 @@ async def global_inline_callback_handler(update: Update, context: ContextTypes.D
 
     if data == "btn_peso":
         await query.message.reply_text(
-            "⚖️ Per aggiornare il tuo peso scrivi:\n`/peso <valore>` (es. `/peso 73.8`)",
+            "⚖️ Per aggiornare il tuo peso scrivi:\n`/peso <valore>` (es. `/peso 73.8`)\n\n"
+            "💡 Oppure tocca il pulsante '⚖️ Peso' sulla tastiera in basso.",
             reply_markup=get_main_keyboard(),
         )
     elif data == "btn_altezza":
@@ -762,7 +1133,8 @@ async def global_inline_callback_handler(update: Update, context: ContextTypes.D
         )
     elif data == "btn_fc":
         await query.message.reply_text(
-            "❤️ Per aggiornare le soglie FC scrivi:\n`/fc <fc_max> [safc]` (es. `/fc 195 172`)",
+            "❤️ Per aggiornare le soglie FC scrivi:\n`/fc <fc_max> [safc]` (es. `/fc 195 172`)\n"
+            "Oppure usa `/fcmax <valore>` o `/safc <valore>`.",
             reply_markup=get_main_keyboard(),
         )
     elif data == "btn_ultimarun":
@@ -777,11 +1149,79 @@ async def global_inline_callback_handler(update: Update, context: ContextTypes.D
                 "ℹ️ Nessun allenamento registrato nello storico locale al momento.",
                 reply_markup=get_main_keyboard(),
             )
+    elif data == "btn_profilo":
+        summary = format_profile_summary()
+        await query.message.reply_text(
+            summary,
+            reply_markup=get_main_keyboard(),
+        )
+        await query.message.reply_text(
+            "💡 Azioni rapide:",
+            reply_markup=get_profile_inline_keyboard(),
+        )
+    elif data == "btn_menu":
+        text = (
+            "📜 **LISTA COMPLETA DEI COMANDI DISPONIBILI**\n"
+            "─────────────────────────────────\n"
+            "Scorri questa lista per consultare tutti i comandi, oppure tocca i pulsanti interattivi sottostanti:\n\n"
+            "🏃‍♂️ **ALLENAMENTO & TABELLA**\n"
+            "• `/ultimarun` — Mostra l'ultimo allenamento registrato e il verdetto AI\n"
+            "• `/piano` — Visualizza o aggiorna la tabella settimanale (`/piano <testo>`)\n"
+            "• `/target` — Modifica il passo gara obiettivo (es. `/target 5:35 min/km`)\n"
+            "• `/gara` — Modifica la gara programmata (es. `/gara Mezza Terre Verdiane`)\n\n"
+            "👤 **PROFILO & FISIOLOGIA ATLETA**\n"
+            "• `/profilo` — Scheda anagrafica, IMC calcolato, trend del peso e soglie FC\n"
+            "• `/peso` — Registra o aggiorna il peso corporeo (es. `/peso 73.8`)\n"
+            "• `/altezza` — Imposta l'altezza in metri o cm (es. `/altezza 1.85`)\n"
+            "• `/fc` — Aggiorna entrambe le soglie FC (`/fc <max> <safc>`, es. `/fc 195 172`)\n"
+            "• `/fcmax` — Aggiorna singolarmente solo la FC Max (es. `/fcmax 202`)\n"
+            "• `/safc` — Aggiorna singolarmente solo la Soglia Anaerobica (es. `/safc 178`)\n\n"
+            "⚙️ **CONFIGURAZIONE & SISTEMA**\n"
+            "• `/start` — Avvia la configurazione iniziale o mostra la scheda atleta\n"
+            "• `/menu` — Riapre questa lista completa e scorrevole dei comandi\n"
+            "• `/reset_onboarding` — Resetta il profilo e riavvia la procedura guidata a 7 step\n"
+            "• `/aiuto` — Guida rapida e sintesi\n"
+            "─────────────────────────────────"
+        )
+        await query.message.reply_text(
+            text,
+            reply_markup=get_commands_inline_keyboard(),
+        )
+    elif data == "btn_piano":
+        current_plan = get_training_plan()
+        await query.message.reply_text(
+            f"📋 **PIANO DI ALLENAMENTO ATTUALE:**\n"
+            "────────────────────────────────\n"
+            f"{current_plan}\n\n"
+            "────────────────────────────────\n"
+            "💡 Per aggiornarlo scrivi: `/piano <incolla qui il tuo nuovo piano>`",
+            reply_markup=get_main_keyboard(),
+        )
+    elif data == "btn_target":
+        profile = load_profile()
+        target = profile.get("passo_target", "5:35 min/km")
+        await query.message.reply_text(
+            f"⚡ Passo target attuale: **{target}**\n\n"
+            "Per aggiornarlo scrivi: `/target <passo>` (es. `/target 5:30`)",
+            reply_markup=get_main_keyboard(),
+        )
+    elif data == "btn_gara":
+        profile = load_profile()
+        gara = profile.get("obiettivo_gara", "N/D")
+        await query.message.reply_text(
+            f"🎯 Gara obiettivo attuale: **{gara}**\n\n"
+            "Per aggiornarla scrivi: `/gara <nome>` (es. `/gara Mezza Terre Verdiane`)",
+            reply_markup=get_main_keyboard(),
+        )
     elif data == "btn_reset_onb":
         reset_profile()
+        inline_kb = [
+            [InlineKeyboardButton("🚀 Avvia Onboarding", callback_data="btn_start_onb")],
+        ]
         await query.message.reply_text(
-            "🔄 Profilo resettato. Digita `/start` per riavviare la procedura guidata!",
-            reply_markup=ReplyKeyboardRemove(),
+            "🔄 Profilo resettato.\n"
+            "Tocca '🚀 Avvia Onboarding' qui sotto o digita `/start` per riavviare la procedura guidata!",
+            reply_markup=InlineKeyboardMarkup(inline_kb),
         )
 
 
@@ -808,30 +1248,69 @@ def build_application(is_mock: bool = False):
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN non configurato nel .env")
 
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .post_init(set_bot_commands)
+        .build()
+    )
     app.bot_data["is_mock"] = is_mock
 
-    # Handler conversazionale per l'onboarding con supporto sia a testo che pulsanti inline
+    # Handler conversazionale per onboarding atomico a 7 step
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start_handler)],
+        entry_points=[
+            CommandHandler("start", start_handler),
+            CallbackQueryHandler(start_callback_handler, pattern="^btn_start_onb$"),
+            MessageHandler(filters.Regex(r"^(🚀 Avvia Onboarding|Avvia Onboarding)$"), start_handler),
+        ],
         states={
-            STEP_BODY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, step_body_handler)
+            STEP_AGE: [
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, step_age_handler),
             ],
-            STEP_CARDIO: [
-                CallbackQueryHandler(step_cardio_callback_handler),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, step_cardio_text_handler),
+            STEP_HEIGHT: [
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                CallbackQueryHandler(step_height_callback_handler, pattern="^height_"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, step_height_text_handler),
+            ],
+            STEP_WEIGHT: [
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, step_weight_handler),
+            ],
+            STEP_FCMAX: [
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                CallbackQueryHandler(step_fcmax_callback_handler, pattern="^fcmax_"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, step_fcmax_text_handler),
+            ],
+            STEP_SAFC: [
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                CallbackQueryHandler(step_safc_callback_handler, pattern="^safc_"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, step_safc_text_handler),
             ],
             STEP_PLAN: [
-                CallbackQueryHandler(step_plan_callback_handler),
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                CallbackQueryHandler(step_plan_callback_handler, pattern="^plan_"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, step_plan_text_handler),
             ],
             STEP_HISTORY: [
-                CallbackQueryHandler(step_history_callback_handler),
+                CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+                CallbackQueryHandler(step_history_callback_handler, pattern="^hist_"),
+                MessageHandler(filters.Regex(r"^(❌ Annulla|annulla|/annulla)$"), cancel_handler),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, step_history_text_handler),
             ],
         },
-        fallbacks=[CommandHandler("annulla", cancel_handler)],
+        fallbacks=[
+            CommandHandler("annulla", cancel_handler),
+            MessageHandler(filters.Regex(r"^(❌ Annulla|annulla)$"), cancel_handler),
+            CallbackQueryHandler(onb_cancel_callback, pattern="^onb_cancel$"),
+        ],
+        per_message=False,
     )
 
     app.add_handler(conv_handler)
@@ -849,8 +1328,10 @@ def build_application(is_mock: bool = False):
     app.add_handler(CommandHandler("gara", gara_command))
     app.add_handler(CommandHandler("ultimarun", ultimarun_command))
     app.add_handler(CommandHandler("reset_onboarding", reset_onboarding_command))
-    app.add_handler(CommandHandler("aiuto", aiuto_command))
-    app.add_handler(CommandHandler("help", aiuto_command))
+    app.add_handler(CommandHandler("menu", menu_command))
+    app.add_handler(CommandHandler("comandi", menu_command))
+    app.add_handler(CommandHandler("aiuto", menu_command))
+    app.add_handler(CommandHandler("help", menu_command))
 
     # Mappatura dei pulsanti della tastiera fissa (Reply Keyboard)
     app.add_handler(MessageHandler(filters.Regex("^📋 Profilo$"), profilo_command))
@@ -860,7 +1341,7 @@ def build_application(is_mock: bool = False):
     app.add_handler(MessageHandler(filters.Regex("^❤️ Soglie FC$"), fc_command))
     app.add_handler(MessageHandler(filters.Regex("^📋 Piano$"), piano_command))
     app.add_handler(MessageHandler(filters.Regex("^⚡ Target$"), target_command))
-    app.add_handler(MessageHandler(filters.Regex("^📖 Aiuto$"), aiuto_command))
+    app.add_handler(MessageHandler(filters.Regex(r"^(📜 Lista Comandi|📜 Menu Comandi|📖 Aiuto)$"), menu_command))
 
     # Callback query per i bottoni inline generici (sotto /profilo)
     app.add_handler(CallbackQueryHandler(global_inline_callback_handler))

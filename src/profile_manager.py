@@ -158,6 +158,22 @@ def parse_hr_thresholds(val: str) -> tuple[int | None, int | None]:
     return fc_max, safc
 
 
+def parse_fc_max(val: str) -> int | None:
+    """Valida ed estrae la frequenza cardiaca massima (FC Max, range 100-240 bpm)."""
+    nums = [int(n) for n in re.findall(r"\b\d{2,3}\b", val)]
+    if nums and 100 <= nums[0] <= 240:
+        return nums[0]
+    return None
+
+
+def parse_safc(val: str) -> int | None:
+    """Valida ed estrae la Soglia Anaerobica (SAFC, range 80-220 bpm)."""
+    nums = [int(n) for n in re.findall(r"\b\d{2,3}\b", val)]
+    if nums and 80 <= nums[0] <= 220:
+        return nums[0]
+    return None
+
+
 def parse_step1_inputs(text: str) -> tuple[int | None, float | None, float | None]:
     """Estrae età, altezza e peso.
     
