@@ -16,7 +16,7 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
 
 ## 3. Tech Stack & Vincoli di Sistema
 - **Runtime:** Python 3.15.1
-- **Librerie Core:** `garminconnect`, `google-genai` (SDK ufficiale v1+, client unificato), `python-telegram-bot[job-queue]`, `python-dotenv`, `requests`, `httpx` (previsto per sviluppi futuri).
+- **Librerie Core:** `garminconnect`, `google-genai` (SDK ufficiale v1+, client unificato), `python-telegram-bot[job-queue]`, `python-dotenv`, `requests`, `httpx` (previsto per sviluppi futuri), `matplotlib` (previsto per visual charting Fase 11).
 - **Persistenza & File Locali:**
   - `.env`: Credenziali Garmin, API key Gemini, token e chat ID Telegram.
   - `~/.garmin_tokens`: Directory cache sessione OAuth Garmin (gestione MFA una tantum).
@@ -213,3 +213,48 @@ Pipeline Python che interroga Garmin Connect, estrae telemetria fisiologica e bi
 * **5. Sanitizzazione e Parsing HTML Telegram:**
   - Istruzione del prompt del Giudice a formattare l'output direttamente in HTML semplice (`<b>`, `<i>`, `<code>`).
   - Aggiornamento di `src/notifier.py` con `parse_mode="HTML"` per garantire output formattato ed elegante, eliminando i crash dovuti ai caratteri speciali non escapati di `MarkdownV2`.
+
+### FASE 10: Fisiologia Olistica & Prevenzione Infortuni (Sonno, HRV, ACWR & Usura Scarpe)
+*Obiettivo:* Integrare la valutazione metabolica e di recupero sistemico per distinguere tra scarso impegno e affaticamento biologico reale, tutelando articolazioni e tendini dell'atleta (96 kg).
+* **1. Estrazione Parametri di Recupero & Sonno:**
+  - Recupero tramite `garminconnect` di: durata e punteggio sonno, stato HRV notturno (equilibrato/basso), Body Battery e ore di recupero stimate.
+  - Iniezione delle metriche di recupero nel prompt del Fisiologo per contestualizzare la deriva cardiaca e la tolleranza allo sforzo prima dell'emissione del verdetto.
+* **2. Calcolo Matematico Deterministico ACWR (Acute:Chronic Workload Ratio):**
+  - Calcolo locale del rapporto tra carico acuto (ultimi 7 giorni) e cronico (ultimi 28 giorni).
+  - Identificazione dello sweet spot (0.8 - 1.3) e attivazione di alert perentorio sopra 1.5 ("danger zone") con prescrizione automatica di scarico o sessione a basso impatto articolare (MTB).
+* **3. Tracciamento Usura Scarpe (Gear Mileage Tracking):**
+  - Monitoraggio chilometrico delle scarpe da corsa (tramite associazione Garmin o registro via bot `/scarpe`).
+  - Soglia di usura e alert preventivo ricalibrati a 400-500 km (rispetto agli standard 700-800 km) a causa dell'elevato impatto al suolo del peso corporeo (96 kg).
+
+### FASE 11: Visual Charting & Multimodalità Telegram (Grafici & Note Vocali)
+*Obiettivo:* Arricchire il feedback del Coach con sintesi grafiche immediate e consentire all'atleta di inviare sensazioni soggettive vocali post-allenamento.
+* **1. Generazione Grafici Telemetrici Locali (`matplotlib`):**
+  - Script locale leggero per generare immagini PNG sintetiche da inviare su Telegram prima del report testuale:
+    - Grafico a barre degli split chilometrici (passo vs target 5:35 min/km e FC media sovrapposta).
+    - Distribuzione percentuale delle 5 zone cardio.
+    - Correlazione Cadenza vs Passo nel corso della seduta.
+* **2. Elaborazione Note Vocali Post-Corsa (RPE & Feedback Soggettivo):**
+  - Gestione messaggi vocali Telegram (`filters.VOICE`) con download temporaneo del file audio `.ogg`.
+  - Trascrizione e analisi multimodale diretta tramite `google-genai` per estrarre sensazioni di fatica, RPE percepito (1-10) e fastidi muscolari/articolari, incrociandoli con la telemetria oggettiva.
+
+### FASE 12: Routine Automatizzate & Debriefing (Daily Briefing & Weekly Digest)
+*Obiettivo:* Rendere la presenza del coach continua e proattiva con comunicazioni pianificate all'inizio e alla fine della settimana.
+* **1. Daily Briefing Mattutino:**
+  - Job periodico Telegram (es. ore 07:00) che notifica la seduta del giorno da `piano_allenamento.txt`, le condizioni meteo previste e una direttiva operativa chiave.
+* **2. Weekly Digest Domenicale:**
+  - Sintesi cumulativa domenicale: volume chilometrico settimanale vs target, tempo totale, dislivello, bilancio cross-training (km corsa vs ore MTB/palestra), trend ponderale e pagellino riassuntivo del Coach con le priorità della settimana successiva.
+
+### FASE 13: Predizione Agonistica (VDOT / Riegel) & Riprogrammazione Dinamica
+*Obiettivo:* Monitorare scientificamente l'avvicinamento alla Mezza delle Terre Verdiane (21.097 km) e adattare il piano in caso di imprevisti.
+* **1. Race Predictor Mezza Maratona:**
+  - Calcolo dinamico del tempo stimato e del passo gara mezza maratona applicando le formule di Riegel e le tabelle VDOT sui dati delle sessioni di medio e lungo e sul trend del peso corporeo.
+  - Verifica della sostenibilità del target 5:35 min/km (1h57m) con indicazione del margine di sicurezza o del rischio di crollo nel finale di gara.
+* **2. Riprogrammazione Dinamica del Piano:**
+  - Comando `/riprogramma` o suggerimento automatico se una seduta chiave viene saltata o posticipata, con ricalcolo ottimizzato dei giorni rimanenti della settimana senza sacrificare il recupero.
+
+### FASE 14: Data Portability & Healthcheck Sessione
+*Obiettivo:* Garantire la resilienza operativa del bot e il pieno possesso dei dati da parte dell'atleta.
+* **1. Comando `/esporta`:**
+  - Generazione ed invio diretto in chat Telegram di un export completo (CSV/JSON/ZIP) con storico sedute, lap telemetrici, log peso e direttive.
+* **2. Healthcheck Preventivo Token Garmin:**
+  - Verifica periodica dello stato di validità dei token OAuth memorizzati in `~/.garmin_tokens`, con notifica tempestiva su Telegram in caso di sessione prossima alla scadenza prima del fallimento dei job di polling.
